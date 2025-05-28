@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Frontend - Next.js (Production)
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      target: production
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+      - NEXT_PUBLIC_WS_URL=wss://api.yourdomain.com
+    restart: unless-stopped
+    networks:
+      - research_network
+
+  # Backend - Node.js (Production)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      target: production
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
+      - CHROMA_URL=http://chromadb:8000
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ./backend/output:/app/output
+      - ./backend/logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+      - chromadb
+    restart: unless-stopped
+    networks:
+      - research_network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    networks:
+      - research_network
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - research_network
+
+  # ChromaDB for vector embeddings
+  chromadb:
+    image: chromadb/chroma:latest
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_PORT=8000
+      - PERSIST_DIRECTORY=/chroma/chroma
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: unless-stopped
+    networks:
+      - research_network
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    networks:
+      - research_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  chroma_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  research_network:
+    driver: bridge

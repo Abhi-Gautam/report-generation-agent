@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String  // Add password field (optional for users created before this change or via other means)
+  avatar    String?
+  projects  Project[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  title       String
+  topic       String
+  status      ProjectStatus @default(DRAFT)
+  outline     Json?
+  content     String?
+  metadata    Json?
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    ResearchSession[]
+  files       ProjectFile[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("projects")
+}
+
+model ResearchSession {
+  id          String        @id @default(cuid())
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status      SessionStatus @default(ACTIVE)
+  progress    Float         @default(0)
+  currentStep String        @default("Initializing")
+  agentLogs   Json[]        @default([])
+  memory      Json?
+  tools       ToolUsage[]
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("research_sessions")
+}
+
+model ToolUsage {
+  id        String          @id @default(cuid())
+  sessionId String
+  session   ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  toolName  String
+  input     Json
+  output    Json
+  duration  Int
+  success   Boolean
+  error     String?
+  createdAt DateTime        @default(now())
+
+  @@map("tool_usage")
+}
+
+model ProjectFile {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName  String
+  filePath  String
+  fileType  FileType
+  fileSize  Int
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  @@map("project_files")
+}
+
+model ResearchSource {
+  id          String   @id @default(cuid())
+  url         String   @unique
+  title       String
+  content     String?
+  summary     String?
+  author      String?
+  publishedAt DateTime?
+  domain      String
+  relevance   Float    @default(0)
+  citations   Json[]   @default([])
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("research_sources")
+}
+
+model UserPreference {
+  id            String @id @default(cuid())
+  userId        String @unique
+  citationStyle String @default("APA")
+  writingStyle  String @default("ACADEMIC")
+  detailLevel   String @default("MODERATE")
+  sourceTypes   Json?
+  language      String @default("en")
+  preferences   Json?
+
+  @@map("user_preferences")
+}
+
+model AgentMemory {
+  id        String   @id @default(cuid())
+  sessionId String
+  type      String
+  content   String
+  importance Float   @default(0.5)
+  tags      String[] @default([])
+  embedding Json?
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  @@map("agent_memory")
+}
+
+enum ProjectStatus {
+  DRAFT
+  RESEARCHING
+  WRITING
+  COMPLETED
+  FAILED
+  PAUSED
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+  PAUSED
+}
+
+enum FileType {
+  PDF
+  DOCX
+  MARKDOWN
+  HTML
+  TXT
+  IMAGE
+}
