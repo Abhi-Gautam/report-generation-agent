@@ -90,16 +90,21 @@ export class OutlineGeneratorTool implements Tool {
   private buildPrompt(input: OutlineGeneratorInput): string {
     const { topic, detailLevel, targetLength, academicField } = input;
 
+    // Adjust sections and depth based on target length
+    const wordsPerPage = 250; // More realistic for academic papers
+    const targetPages = Math.max(2, Math.floor((targetLength || 2000) / wordsPerPage));
+    const sectionsCount = Math.min(6, Math.max(4, targetPages - 1)); // 4-6 main sections
+
     return `
-Create a comprehensive research paper outline for the topic: "${topic}"
+Create a research paper outline for the topic: "${topic}"
 
 Requirements:
-- Detail Level: ${detailLevel || 'MODERATE'} 
-- Target Length: ${targetLength || 3000} words
+- Detail Level: ${detailLevel || 'BRIEF'} 
+- Target Length: ${targetLength || 2000} words (approximately ${targetPages} pages)
 - Academic Field: ${academicField || 'General'}
-- Include 6-8 main sections with subsections
+- Include ${sectionsCount} main sections with subsections
 - Provide key points for each section
-- Estimate word count per section
+- Estimate word count per section to total ${targetLength || 2000} words
 - Generate relevant keywords
 - Include an abstract summary
 - Rate difficulty level (BEGINNER/INTERMEDIATE/ADVANCED)
@@ -113,16 +118,16 @@ Please format the response as a JSON object with the following structure:
       "id": "section_1",
       "title": "Section Title",
       "subsections": ["Subsection 1", "Subsection 2"],
-      "estimatedWords": 500,
+      "estimatedWords": 400,
       "keyPoints": ["Key point 1", "Key point 2"]
     }
   ],
   "keywords": ["keyword1", "keyword2"],
-  "estimatedLength": 3000,
+  "estimatedLength": ${targetLength || 2000},
   "difficulty": "INTERMEDIATE"
 }
 
-Make the outline academically rigorous and well-structured.
+Make the outline academically rigorous but concise for the target length.
     `;
   }
 

@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { PrismaClient, ToolUsage, ResearchSession, Project } from '@prisma/client'; // Import necessary types
 import { LoggerService } from '../services/logger';
+import { AuthenticatedRequest } from '../types/request';
 
 const router = Router();
 const prisma = new PrismaClient();
 const logger = new LoggerService();
 
 // GET /api/research/sessions/:id - Get research session details
-router.get('/sessions/:id', async (req, res): Promise<void> => {
+router.get('/sessions/:id', async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const sessionId = req.params.id;
     const userId = req.user?.id;
@@ -63,7 +64,7 @@ router.get('/sessions/:id', async (req, res): Promise<void> => {
 });
 
 // GET /api/research/sessions/:id/logs - Get session agent logs
-router.get('/sessions/:id/logs', async (req, res): Promise<void> => {
+router.get('/sessions/:id/logs', async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const sessionId = req.params.id;
     const userId = req.user?.id;
@@ -123,7 +124,7 @@ router.get('/sessions/:id/logs', async (req, res): Promise<void> => {
 });
 
 // GET /api/research/sessions/:id/tools - Get session tool usage
-router.get('/sessions/:id/tools', async (req, res): Promise<void> => {
+router.get('/sessions/:id/tools', async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const sessionId = req.params.id;
     const userId = req.user?.id;
@@ -248,7 +249,7 @@ router.get('/sources', async (req, res): Promise<void> => {
 });
 
 // GET /api/research/analytics - Get research analytics
-router.get('/analytics', async (req, res): Promise<void> => {
+router.get('/analytics', async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const userId = req.user?.id;
 

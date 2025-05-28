@@ -7,10 +7,25 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ResearchForm } from '@/components/research-form'
 import { Header } from '@/components/header'
+import { useAuth } from '@/lib/hooks/use-auth'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
 
 export default function HomePage() {
   const [showResearchForm, setShowResearchForm] = useState(false)
+  const { isAuthenticated } = useAuth()
+  const router = useRouter()
+
+  const handleStartResearch = () => {
+    if (isAuthenticated) {
+      router.push('/dashboard')
+    } else {
+      setShowResearchForm(true)
+    }
+  }
 
   const features = [
     {
@@ -213,16 +228,16 @@ export default function HomePage() {
             <Button 
               size="lg" 
               className="text-lg px-12 py-6 animate-pulse-glow"
-              onClick={() => setShowResearchForm(true)}
+              onClick={handleStartResearch}
             >
-              Generate Your First Paper <ArrowRight className="ml-2 h-5 w-5" />
+              {isAuthenticated ? 'Go to Dashboard' : 'Generate Your First Paper'} <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </motion.div>
         </div>
       </section>
 
-      {/* Research Form Modal */}
-      {showResearchForm && (
+      {/* Research Form Modal - Only show if not authenticated */}
+      {showResearchForm && !isAuthenticated && (
         <ResearchForm onClose={() => setShowResearchForm(false)} />
       )}
     </div>

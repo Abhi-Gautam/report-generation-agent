@@ -14,8 +14,11 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String
-  password  String  // Add password field (optional for users created before this change or via other means)
+  password  String
   avatar    String?
+  hasSubscription Boolean @default(false)
+  subscriptionTier String? // "BASIC", "PREMIUM", "ENTERPRISE"
+  subscriptionExpiresAt DateTime?
   projects  Project[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

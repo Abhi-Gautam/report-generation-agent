@@ -11,6 +11,7 @@ import dotenv from 'dotenv';
 import projectRoutes from './routes/projects';
 import userRoutes from './routes/users';
 import researchRoutes from './routes/research';
+import authRoutes from './routes/auth';
 
 // Import services
 import { DatabaseService } from './services/database';
@@ -120,6 +121,7 @@ class Application {
 
   private initializeRoutes(): void {
     // Public routes
+    this.app.use('/api/auth', authRoutes);
     this.app.use('/api/users', userRoutes);
 
     // Make projects route public for demo (remove auth middleware)

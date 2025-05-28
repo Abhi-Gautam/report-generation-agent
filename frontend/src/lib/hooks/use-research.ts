@@ -119,10 +119,12 @@ export function useResearchGeneration() {
 
   const createProjectMutation = useMutation({
     mutationFn: async (input: ResearchGenerationInput) => {
+      const token = localStorage.getItem('auth_token')
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(input),
       })
@@ -137,10 +139,12 @@ export function useResearchGeneration() {
 
   const generateResearchMutation = useMutation({
     mutationFn: async (projectId: string) => {
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`/api/projects/${projectId}/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           options: {

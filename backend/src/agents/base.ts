@@ -148,9 +148,11 @@ export class AgentMemoryManager {
         this.memory.shortTerm.delete(firstKey);
       }
     }
+    
+    const now = new Date();
     this.memory.shortTerm.set(key, {
       value,
-      timestamp: new Date(),
+      timestamp: isNaN(now.getTime()) ? new Date() : now,
       accessCount: 0
     });
   }
@@ -159,7 +161,8 @@ export class AgentMemoryManager {
     const item = this.memory.shortTerm.get(key);
     if (item) {
       item.accessCount++;
-      item.lastAccessed = new Date();
+      const now = new Date();
+      item.lastAccessed = isNaN(now.getTime()) ? new Date() : now;
       return item.value;
     }
     return null;
@@ -172,10 +175,11 @@ export class AgentMemoryManager {
       this.cleanupLongTermMemory();
     }
     
+    const now = new Date();
     this.memory.longTerm.set(key, {
       value,
       importance,
-      timestamp: new Date(),
+      timestamp: isNaN(now.getTime()) ? new Date() : now,
       accessCount: 0
     });
   }
@@ -184,7 +188,8 @@ export class AgentMemoryManager {
     const item = this.memory.longTerm.get(key);
     if (item) {
       item.accessCount++;
-      item.lastAccessed = new Date();
+      const now = new Date();
+      item.lastAccessed = isNaN(now.getTime()) ? new Date() : now;
       return item.value;
     }
     return null;
@@ -227,37 +232,72 @@ export class AgentMemoryManager {
     };
   }
 
-  // Export/Import memory for persistence with date serialization
+  // Export/Import memory for persistence with safe serialization
   public exportMemory(): any {
-    const serializeValue = (value: any): any => {
-      if (value instanceof Date) {
-        return value.toISOString();
+    // Completely safe serialization that avoids any date issues
+    const safeSerialize = (obj: any): any => {
+      try {
+        return JSON.parse(JSON.stringify(obj, (_key, value) => {
+          // Skip any dates entirely to avoid serialization issues
+          if (value instanceof Date) {
+            return value.getTime && !isNaN(value.getTime()) ? value.toISOString() : new Date().toISOString();
+          }
+          // Skip functions and undefined values
+          if (typeof value === 'function' || value === undefined) {
+            return null;
+          }
+          return value;
+        }));
+      } catch (error) {
+        console.warn('Serialization failed, returning empty object:', error);
+        return {};
       }
-      if (typeof value === 'object' && value !== null) {
-        const result: any = {};
-        for (const [key, val] of Object.entries(value)) {
-          result[key] = serializeValue(val);
+    };
+
+    try {
+      // Convert Maps to arrays safely
+      const shortTermArray: any[] = [];
+      const longTermArray: any[] = [];
+
+      // Safe iteration over short-term memory
+      try {
+        for (const [key, value] of this.memory.shortTerm.entries()) {
+          try {
+            shortTermArray.push([key, safeSerialize(value)]);
+          } catch (error) {
+            console.warn(`Skipping problematic short-term memory key: ${key}`, error);
+          }
         }
-        return result;
+      } catch (error) {
+        console.warn('Error processing short-term memory:', error);
       }
-      return value;
-    };
 
-    const shortTermArray = Array.from(this.memory.shortTerm.entries()).map(([key, value]) => [
-      key,
-      serializeValue(value)
-    ]);
+      // Safe iteration over long-term memory
+      try {
+        for (const [key, value] of this.memory.longTerm.entries()) {
+          try {
+            longTermArray.push([key, safeSerialize(value)]);
+          } catch (error) {
+            console.warn(`Skipping problematic long-term memory key: ${key}`, error);
+          }
+        }
+      } catch (error) {
+        console.warn('Error processing long-term memory:', error);
+      }
 
-    const longTermArray = Array.from(this.memory.longTerm.entries()).map(([key, value]) => [
-      key,
-      serializeValue(value)
-    ]);
-
-    return {
-      shortTerm: shortTermArray,
-      longTerm: longTermArray,
-      context: serializeValue(this.memory.context)
-    };
+      return {
+        shortTerm: shortTermArray,
+        longTerm: longTermArray,
+        context: safeSerialize(this.memory.context)
+      };
+    } catch (error) {
+      console.error('Failed to export memory, returning minimal structure:', error);
+      return {
+        shortTerm: [],
+        longTerm: [],
+        context: {}
+      };
+    }
   }
 
   public importMemory(data: any): void {

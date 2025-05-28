@@ -1,4 +1,30 @@
 services:
+  # Database Migration Service - Runs before backend
+  db-migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://admin:securepassword@postgres:5432/research_db
+    volumes:
+      - ./backend/prisma:/app/prisma
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - research_network
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        npx prisma db push --accept-data-loss &&
+        npx prisma generate &&
+        echo 'Database migrations completed!'
+      "
+    profiles:
+      - migration
+
   # Frontend - Next.js
   frontend:
     build: 
@@ -15,7 +41,6 @@ services:
       # Mount source code for hot reload
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
-      - ./shared:/app/shared
       # Preserve container's node_modules only (remove .next mount)
       - /app/node_modules
     user: "1001:1001"  # Use same user as in Dockerfile
@@ -45,7 +70,6 @@ services:
       # Mount source code for hot reload
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
-      - ./shared:/app/shared
       # Preserve container's node_modules
       - /app/node_modules
     user: "1001:1001"  # Use same user as in Dockerfile
@@ -58,6 +82,13 @@ services:
         condition: service_started
     networks:
       - research_network
+    command: >
+      sh -c "
+        echo 'Starting backend with automatic migrations...' &&
+        npx prisma db push --accept-data-loss &&
+        npx prisma generate &&
+        npm run dev
+      "
 
   # PostgreSQL Database
   postgres:

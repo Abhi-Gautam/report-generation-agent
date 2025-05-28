@@ -90,7 +90,7 @@ export class WebSearchTool implements Tool {
         snippet: result.description,
         source: this.extractDomain(result.url),
         relevanceScore: this.calculateRelevanceScore(result, input.query),
-        publishedDate: result.age ? new Date(result.age) : undefined
+        publishedDate: this.parseDate(result.age)
       })) || [];
 
       const duration = Date.now() - startTime;
@@ -115,6 +115,21 @@ export class WebSearchTool implements Tool {
         error: errorMessage,
         metadata: { duration }
       };
+    }
+  }
+
+  private parseDate(dateValue: any): Date | undefined {
+    if (!dateValue) return undefined;
+    
+    try {
+      const date = new Date(dateValue);
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return undefined;
+      }
+      return date;
+    } catch (error) {
+      return undefined;
     }
   }
 

@@ -72,19 +72,19 @@ export class ResearchAgent extends BaseAgent {
     try {
       // Step 1: Initialize context and memory
       await this.initializeResearchContext(input);
-      this.updateProgress(10, 'Initializing research context');
+      this.updateProgress(5, 'Initializing research context');
 
       // Step 2: Generate research outline
       const outline = await this.generateOutline(input.topic);
-      this.updateProgress(25, 'Generated research outline');
+      this.updateProgress(20, 'Generated research outline');
 
       // Step 3: Conduct research for each section
       const researchData = await this.conductResearch(outline);
-      this.updateProgress(60, 'Completed research phase');
+      this.updateProgress(65, 'Completed research phase');
 
       // Step 4: Generate content
       const content = await this.generateContent(outline, researchData);
-      this.updateProgress(80, 'Generated paper content');
+      this.updateProgress(85, 'Generated paper content');
 
       // Step 5: Generate PDF (optional)
       let pdfPath: string | undefined;
@@ -176,8 +176,12 @@ export class ResearchAgent extends BaseAgent {
   }
 
   private async generateOutline(topic: string): Promise<ResearchOutline> {
-    // const outlineTool = this.config.tools.find(t => t.name === 'OutlineGenerator') as OutlineGeneratorTool; // Unused
-    const result = await this.executeTool('OutlineGenerator', { topic });
+    const preferences = this.memory.getShortTerm('preferences') || {};
+    const result = await this.executeTool('OutlineGenerator', { 
+      topic,
+      detailLevel: preferences.detailLevel || 'BRIEF',
+      targetLength: preferences.targetLength || 2000
+    });
 
     if (!result.success) {
       throw new Error(`Failed to generate outline: ${result.error}`);
@@ -189,20 +193,21 @@ export class ResearchAgent extends BaseAgent {
   }
 
   private async conductResearch(outline: ResearchOutline): Promise<any[]> {
-    // const searchTool = this.config.tools.find(t => t.name === 'WebSearch') as WebSearchTool; // Unused
-    // const analyzerTool = this.config.tools.find(t => t.name === 'ContentAnalyzer') as ContentAnalyzerTool; // Unused
-    
     const allResearchData: any[] = [];
-    const totalSections = outline.sections.length;
     // Reduce research in development mode
     const sectionsToResearch = process.env.NODE_ENV === 'development' 
       ? Math.min(3, outline.sections.length) 
       : outline.sections.length;
 
+    const baseProgress = 20; // Starting progress after outline
+    const researchProgressRange = 45; // Progress range for research (20% to 65%)
+
     for (let i = 0; i < sectionsToResearch; i++) {
       const section = outline.sections[i];
+      const sectionProgress = baseProgress + (researchProgressRange * ((i + 1) / sectionsToResearch));
+      
       this.updateProgress(
-        25 + (35 * (i / totalSections)),
+        Math.round(sectionProgress),
         `Researching: ${section.title}`
       );
 

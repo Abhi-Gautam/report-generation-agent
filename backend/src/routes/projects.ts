@@ -4,6 +4,8 @@ import { PrismaClient, Prisma } from '@prisma/client'; // Correctly import Prism
 import { ResearchAgent } from '../agents/researchAgent';
 import { WebSocketService } from '../services/websocket';
 import { LoggerService } from '../services/logger';
+import { authenticateToken } from '../middleware/auth';
+import { AuthenticatedRequest } from '../types/request';
 // import { v4 as uuidv4 } from 'uuid'; // Unused
 
 const router = Router();
@@ -33,17 +35,21 @@ const generateResearchSchema = z.object({
 });
 
 // GET /api/projects - List user's projects
-router.get('/', async (_req, res): Promise<void> => {
+router.get('/', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
-    // Use demo user for now (remove auth check temporarily)
-    const userId = 'demo-user-123';
+    const userId = req.user!.id;
     
     const projects = await prisma.project.findMany({
-      where: { userId: userId }, // Explicitly use validated userId
+      where: { userId: userId },
       include: {
         sessions: {
           orderBy: { createdAt: 'desc' },
           take: 1
+        },
+        files: {
+          where: { fileType: 'PDF' },
+          take: 1,
+          orderBy: { createdAt: 'desc' }
         }
       },
       orderBy: { updatedAt: 'desc' }
@@ -66,12 +72,10 @@ router.get('/', async (_req, res): Promise<void> => {
 });
 
 // POST /api/projects - Create new project
-router.post('/', async (req, res): Promise<void> => {
+router.post('/', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const validatedData = createProjectSchema.parse(req.body);
-    
-    // Use demo user for now
-    const userId = 'demo-user-123';
+    const userId = req.user!.id;
 
     const project = await prisma.project.create({
       data: {
@@ -82,7 +86,7 @@ router.post('/', async (req, res): Promise<void> => {
       }
     });
 
-    logger.info(`Created new project: ${project.id} for demo user`);
+    logger.info(`Created new project: ${project.id} for user: ${userId}`);
 
     res.status(201).json({
       success: true,
@@ -155,16 +159,15 @@ router.get('/:id', async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/projects/:id/generate - Start research generation
-router.post('/:id/generate', async (req, res): Promise<void> => {
+//POST /api/projects/:id/generate - Start research generation
+router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const validatedData = generateResearchSchema.parse({
       projectId: req.params.id,
       options: req.body.options
     });
     
-    // Use demo user for now
-    const userId = 'demo-user-123';
+    const userId = req.user!.id;
     const websocket = req.app.get('websocket') as WebSocketService;
 
     // Verify project ownership
@@ -218,17 +221,18 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
     // Execute research in background
     setImmediate(async () => {
       try {
-        const preferencesForAgent: any = { // Start with any and build up
-            detailLevel: validatedData.options?.maxSources ? 'COMPREHENSIVE' : 'MODERATE',
+        // Use preferences from the request and set defaults for brief papers
+        const preferencesForAgent: any = {
+          detailLevel: validatedData.options?.maxSources ? 'COMPREHENSIVE' : 'BRIEF', // Default to BRIEF
+          maxSources: validatedData.options?.maxSources || 3, // Limit sources for shorter papers
+          targetLength: 2000 // Default to ~4 pages (500 words per page)
         };
+        
         if (validatedData.options?.citationStyle !== undefined) {
-            preferencesForAgent.citationStyle = validatedData.options.citationStyle;
-        }
-        if (validatedData.options?.maxSources !== undefined) {
-            preferencesForAgent.maxSources = validatedData.options.maxSources;
+          preferencesForAgent.citationStyle = validatedData.options.citationStyle;
         }
         if (validatedData.options?.includeImages !== undefined) {
-            preferencesForAgent.includeImages = validatedData.options.includeImages;
+          preferencesForAgent.includeImages = validatedData.options.includeImages;
         }
 
         const result = await researchAgent.execute({
@@ -280,8 +284,17 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
           });
         }
 
-        // Notify completion via WebSocket
+        // Notify completion via WebSocket - Send final progress first, then completion
         if (websocketInstance) {
+          // Send final progress update
+          websocketInstance.sendProgressUpdate(session.id, {
+            sessionId: session.id,
+            progress: 100,
+            currentStep: 'Research completed successfully!',
+            message: 'Research completed successfully!'
+          });
+
+          // Then send completion
           websocketInstance.sendCompletion(session.id, {
             projectId: project.id,
             sessionId: session.id,

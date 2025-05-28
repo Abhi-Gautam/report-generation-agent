@@ -62,17 +62,41 @@ The system is built with a modular, multi-agent architecture and a modern web st
 - Nginx
 - PM2
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Automated Setup)
 
 ### Prerequisites
 - Docker and Docker Compose
 - Node.js 18+ (for local development)
 - API Keys: Google Gemini, Brave Search
 
-1. **Clone the Repository**
-2. **Set up your environment variables** (see `.env.example`)
-3. **Start with Docker**: `docker-compose up -d`
-4. **Access the application** at `http://localhost:3000`
+```bash
+# Start services
+docker-compose up -d
+
+# Migrations are automatic, but if needed:
+npm run migrate
+```
+
+### **Access Points**
+- 🖥️ **Frontend**: http://localhost:3000
+- 🔧 **Backend API**: http://localhost:4000  
+- 🗄️ **Database**: localhost:5432
+- 📊 **Prisma Studio**: `npm run db:studio`
+
+### **Daily Development**
+```bash
+# Start/restart
+npm run dev
+
+# View logs
+npm run logs
+
+# Stop services
+npm run stop
+```
+
+> **🎯 No More Database Issues!** 
+> Our automated setup handles all database migrations automatically. No more "column does not exist" errors!
 
 ## 📖 Usage
 
