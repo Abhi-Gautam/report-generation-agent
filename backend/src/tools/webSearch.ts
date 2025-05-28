@@ -67,6 +67,9 @@ export class WebSearchTool implements Tool {
         };
       }
 
+      // Reduce API calls in development mode
+      const maxResults = process.env.NODE_ENV === 'development' ? 3 : (input.maxResults || 10);
+
       const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
         headers: {
           'X-Subscription-Token': this.apiKey,
@@ -74,7 +77,7 @@ export class WebSearchTool implements Tool {
         },
         params: {
           q: input.query,
-          count: input.maxResults || 10,
+          count: maxResults,
           safesearch: input.safeSearch ? 'strict' : 'off',
           country: input.region || 'US'
         },

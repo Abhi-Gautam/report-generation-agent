@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, FileText, Settings, Zap, Download } from 'lucide-react'
+import { X, FileText, Settings, Zap, Download, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { PDFViewer } from '@/components/pdf-viewer'
 import { useResearchGeneration } from '@/lib/hooks/use-research'
 import { useToast } from '@/lib/hooks/use-toast'
 
@@ -15,6 +16,7 @@ interface ResearchFormProps {
 
 export function ResearchForm({ onClose }: ResearchFormProps) {
   const [topic, setTopic] = useState('')
+  const [showPDFViewer, setShowPDFViewer] = useState(false)
   const [preferences, setPreferences] = useState({
     detailLevel: 'MODERATE' as 'BRIEF' | 'MODERATE' | 'COMPREHENSIVE',
     citationStyle: 'APA' as 'APA' | 'MLA' | 'CHICAGO' | 'IEEE',
@@ -58,7 +60,7 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
   }
 
   const handleDownload = () => {
-    if (result?.pdfPath) {
+    if (result?.projectId) {
       const link = document.createElement('a')
       link.href = `/api/projects/${result.projectId}/download`
       link.download = `${topic.replace(/\s+/g, '_')}.pdf`
@@ -66,6 +68,17 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
       link.click()
       document.body.removeChild(link)
     }
+  }
+
+  const handleViewPDF = () => {
+    setShowPDFViewer(true)
+  }
+
+  const getPDFUrl = () => {
+    if (result?.projectId) {
+      return `/api/projects/${result.projectId}/download?view=true`
+    }
+    return ''
   }
 
   return (
@@ -94,26 +107,26 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Topic Input */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Research Topic</label>
+                    <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Research Topic</label>
                     <textarea
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
                       placeholder="e.g., The Impact of Artificial Intelligence on Modern Education Systems"
-                      className="w-full min-h-[80px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full min-h-[80px] p-3 border border-gray-300 dark:border-gray-600 rounded-md resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       required
                     />
                   </div>
                   {/* Preferences */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Detail Level</label>
+                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Detail Level</label>
                       <select
                         value={preferences.detailLevel}
                         onChange={(e) => setPreferences(prev => ({ 
                           ...prev, 
                           detailLevel: e.target.value as any 
                         }))}
-                        className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                       >
                         <option value="BRIEF">Brief (2-3 pages)</option>
                         <option value="MODERATE">Moderate (5-8 pages)</option>
@@ -121,14 +134,14 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Citation Style</label>
+                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Citation Style</label>
                       <select
                         value={preferences.citationStyle}
                         onChange={(e) => setPreferences(prev => ({ 
                           ...prev, 
                           citationStyle: e.target.value as any 
                         }))}
-                        className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                       >
                         <option value="APA">APA</option>
                         <option value="MLA">MLA</option>
@@ -137,7 +150,7 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Max Sources</label>
+                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Max Sources</label>
                       <input
                         type="number"
                         min="5"
@@ -147,11 +160,11 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
                           ...prev, 
                           maxSources: parseInt(e.target.value) 
                         }))}
-                        className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Include Images</label>
+                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Include Images</label>
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -160,9 +173,9 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
                             ...prev, 
                             includeImages: e.target.checked 
                           }))}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800"
                         />
-                        <span className="text-sm text-gray-600">Include relevant images and charts</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Include relevant images and charts</span>
                       </div>
                     </div>
                   </div>
@@ -212,10 +225,16 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
                           <div className="text-gray-600">Quality Score</div>
                         </div>
                       </div>
-                      <Button onClick={handleDownload} className="w-full" size="lg">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download PDF
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button onClick={handleViewPDF} variant="outline" className="flex-1">
+                          <Eye className="mr-2 h-4 w-4" />
+                          View PDF
+                        </Button>
+                        <Button onClick={handleDownload} className="flex-1">
+                          <Download className="mr-2 h-4 w-4" />
+                          Download PDF
+                        </Button>
+                      </div>
                     </motion.div>
                   )}
                   {status === 'error' && (
@@ -240,6 +259,16 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
           </Card>
         </motion.div>
       </div>
+
+      {/* PDF Viewer Modal */}
+      {showPDFViewer && result?.projectId && (
+        <PDFViewer
+          pdfUrl={getPDFUrl()}
+          fileName={`${topic.replace(/\s+/g, '_')}.pdf`}
+          onClose={() => setShowPDFViewer(false)}
+          onDownload={handleDownload}
+        />
+      )}
     </AnimatePresence>
   )
 }

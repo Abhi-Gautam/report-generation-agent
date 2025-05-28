@@ -143,7 +143,7 @@ export class ResearchAgent extends BaseAgent {
     };
 
     // Use AI to extract key entities and generate research questions
-    const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
       Analyze the research topic: "${input.topic}"
       
@@ -194,8 +194,12 @@ export class ResearchAgent extends BaseAgent {
     
     const allResearchData: any[] = [];
     const totalSections = outline.sections.length;
+    // Reduce research in development mode
+    const sectionsToResearch = process.env.NODE_ENV === 'development' 
+      ? Math.min(3, outline.sections.length) 
+      : outline.sections.length;
 
-    for (let i = 0; i < outline.sections.length; i++) {
+    for (let i = 0; i < sectionsToResearch; i++) {
       const section = outline.sections[i];
       this.updateProgress(
         25 + (35 * (i / totalSections)),
@@ -205,7 +209,7 @@ export class ResearchAgent extends BaseAgent {
       // Search for information about this section
       const searchResult = await this.executeTool('WebSearch', {
         query: `${outline.title} ${section.title}`,
-        maxResults: 5
+        maxResults: process.env.NODE_ENV === 'development' ? 2 : 5
       });
 
       if (searchResult.success && searchResult.data) {

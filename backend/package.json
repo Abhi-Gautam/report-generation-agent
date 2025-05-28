@@ -58,6 +58,7 @@
     "@types/swagger-ui-express": "latest",
     "typescript": "latest",
     "nodemon": "latest",
+    "ts-node": "latest",
     "tsx": "latest",
     "prisma": "latest",
     "jest": "latest",

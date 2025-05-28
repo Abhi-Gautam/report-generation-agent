@@ -24,7 +24,6 @@ COPY backend/src ./src
 
 # Install backend dependencies
 RUN npm install --legacy-peer-deps --no-audit --no-fund
-RUN npm install nodemon --save-dev
 
 # Generate Prisma client
 RUN npx prisma generate

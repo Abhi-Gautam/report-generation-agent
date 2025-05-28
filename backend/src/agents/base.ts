@@ -227,12 +227,36 @@ export class AgentMemoryManager {
     };
   }
 
-  // Export/Import memory for persistence
+  // Export/Import memory for persistence with date serialization
   public exportMemory(): any {
+    const serializeValue = (value: any): any => {
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      if (typeof value === 'object' && value !== null) {
+        const result: any = {};
+        for (const [key, val] of Object.entries(value)) {
+          result[key] = serializeValue(val);
+        }
+        return result;
+      }
+      return value;
+    };
+
+    const shortTermArray = Array.from(this.memory.shortTerm.entries()).map(([key, value]) => [
+      key,
+      serializeValue(value)
+    ]);
+
+    const longTermArray = Array.from(this.memory.longTerm.entries()).map(([key, value]) => [
+      key,
+      serializeValue(value)
+    ]);
+
     return {
-      shortTerm: Array.from(this.memory.shortTerm.entries()),
-      longTerm: Array.from(this.memory.longTerm.entries()),
-      context: this.memory.context
+      shortTerm: shortTermArray,
+      longTerm: longTermArray,
+      context: serializeValue(this.memory.context)
     };
   }
 

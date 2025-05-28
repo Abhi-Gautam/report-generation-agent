@@ -175,7 +175,7 @@ export class ContentAnalyzerTool implements Tool {
     section: string
     // analysisType?: string // Parameter is unused in current implementation
   ): Promise<AnalyzedContent> {
-    const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     // Prepare content for analysis
     const contentText = enrichedContent

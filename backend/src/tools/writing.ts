@@ -105,7 +105,7 @@ export class WritingTool implements Tool {
     sectionData: any, 
     preferences: any
   ): Promise<string> {
-    const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     // Prepare research data for this section
     const researchContent = sectionData ? {

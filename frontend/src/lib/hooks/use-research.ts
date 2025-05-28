@@ -77,6 +77,8 @@ export function useResearchGeneration() {
   }, [])
 
   const handleWebSocketMessage = (message: any) => {
+    console.log('Received WebSocket message:', message.type, message.payload)
+    
     switch (message.type) {
       case 'PROGRESS_UPDATE':
         const progressUpdate = message.payload as ProgressUpdate
@@ -85,6 +87,7 @@ export function useResearchGeneration() {
         break
 
       case 'COMPLETION':
+        console.log('Completion received:', message.payload)
         setStatus('completed')
         setResult(message.payload)
         setProgress(100)
@@ -92,6 +95,7 @@ export function useResearchGeneration() {
         break
 
       case 'ERROR':
+        console.log('Error received:', message.payload)
         setStatus('error')
         setError(message.payload.message)
         setCurrentStep('An error occurred during research generation')

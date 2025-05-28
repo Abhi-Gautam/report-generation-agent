@@ -33,13 +33,10 @@ const generateResearchSchema = z.object({
 });
 
 // GET /api/projects - List user's projects
-router.get('/', async (req, res): Promise<void> => {
+router.get('/', async (_req, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    // Use demo user for now (remove auth check temporarily)
+    const userId = 'demo-user-123';
     
     const projects = await prisma.project.findMany({
       where: { userId: userId }, // Explicitly use validated userId
@@ -116,12 +113,8 @@ router.post('/', async (req, res): Promise<void> => {
 router.get('/:id', async (req, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    // Use demo user for now (remove auth check temporarily)
+    const userId = 'demo-user-123';
 
     const project = await prisma.project.findFirst({
       where: {
@@ -212,6 +205,16 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
     // Capture websocket in a variable for closure
     const websocketInstance = websocket;
 
+    // Validate websocket instance
+    if (!websocketInstance) {
+      logger.error('WebSocket service not available');
+      res.status(500).json({
+        success: false,
+        error: 'WebSocket service not available'
+      });
+      return;
+    }
+
     // Execute research in background
     setImmediate(async () => {
       try {
@@ -278,16 +281,18 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
         }
 
         // Notify completion via WebSocket
-        websocketInstance.sendCompletion(session.id, {
-          projectId: project.id,
-          sessionId: session.id,
-          result: {
-            wordCount: result.metadata.wordCount,
-            sourceCount: result.metadata.sourceCount,
-            quality: result.metadata.quality,
-            pdfGenerated: !!result.pdfPath
-          }
-        });
+        if (websocketInstance) {
+          websocketInstance.sendCompletion(session.id, {
+            projectId: project.id,
+            sessionId: session.id,
+            metadata: {
+              wordCount: result.metadata.wordCount,
+              sourceCount: result.metadata.sourceCount,
+              quality: result.metadata.quality
+            },
+            pdfPath: result.pdfPath
+          });
+        }
 
       } catch (error) {
         logger.error('Research generation failed:', error);
@@ -307,11 +312,13 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
         });
 
         // Notify error via WebSocket
-        websocketInstance.sendError(session.id, {
-          message: error instanceof Error ? error.message : 'Research generation failed',
-          projectId: project.id,
-          sessionId: session.id
-        });
+        if (websocketInstance) {
+          websocketInstance.sendError(session.id, {
+            message: error instanceof Error ? error.message : 'Research generation failed',
+            projectId: project.id,
+            sessionId: session.id
+          });
+        }
       }
     });
 
@@ -347,12 +354,8 @@ router.post('/:id/generate', async (req, res): Promise<void> => {
 router.get('/:id/status', async (req, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    // Use demo user for now (remove auth check temporarily)
+    const userId = 'demo-user-123';
 
     const project = await prisma.project.findFirst({
       where: {
@@ -405,17 +408,18 @@ router.get('/:id/status', async (req, res): Promise<void> => {
 router.get('/:id/download', async (req, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    const userId = req.user?.id;
+    // Use demo user for now (remove auth check temporarily)
+    // const userId = req.user?.id;
 
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    // if (!userId) {
+    //   res.status(401).json({ success: false, error: 'User not authenticated' });
+    //   return;
+    // }
 
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        userId: userId
+        // userId: userId  // Comment out for demo
       },
       include: {
         files: {
@@ -445,12 +449,28 @@ router.get('/:id/download', async (req, res): Promise<void> => {
       return;
     }
 
-    // Set headers for file download
+    // Check if file exists
+    const fs = require('fs');
+    
+    if (!fs.existsSync(pdfFile.filePath)) {
+      res.status(404).json({
+        success: false,
+        error: 'PDF file not found on disk'
+      });
+      return;
+    }
+
+    // Set headers for file download or viewing
+    const viewMode = req.query.view === 'true';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${pdfFile.fileName}"`);
+    
+    if (viewMode) {
+      res.setHeader('Content-Disposition', 'inline');
+    } else {
+      res.setHeader('Content-Disposition', `attachment; filename="${pdfFile.fileName}"`);
+    }
 
     // Stream file to response
-    const fs = require('fs');
     const fileStream = fs.createReadStream(pdfFile.filePath);
     fileStream.pipe(res);
 
@@ -470,12 +490,8 @@ router.get('/:id/download', async (req, res): Promise<void> => {
 router.delete('/:id', async (req, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    // Use demo user for now (remove auth check temporarily)
+    const userId = 'demo-user-123';
 
     const project = await prisma.project.findFirst({
       where: {
