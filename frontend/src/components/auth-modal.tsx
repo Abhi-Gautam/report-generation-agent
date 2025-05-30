@@ -159,16 +159,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   }
                 </button>
               </div>
-
-              {mode === 'login' && (
-                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md">
-                  <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">Demo Accounts:</p>
-                  <div className="text-xs text-blue-600 dark:text-blue-300 mt-1 space-y-1">
-                    <div>Premium: john@example.com / password123</div>
-                    <div>Free: jane@example.com / password123</div>
-                  </div>
-                </div>
-              )}
             </form>
           </CardContent>
         </Card>
