@@ -62,10 +62,6 @@ services:
         echo 'Starting backend with automatic migrations...' &&
         npx prisma db push --accept-data-loss &&
         npx prisma generate &&
-        if [ \"$$AUTO_SEED\" = \"true\" ]; then
-          echo 'Running database seed...' &&
-          npm run db:seed
-        fi &&
         npm run dev
       "
 
