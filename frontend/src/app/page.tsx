@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { BookOpen, Brain, Zap, Target, ArrowRight, Github, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ResearchForm } from '@/components/research-form'
-import { Header } from '@/components/header'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -18,6 +17,13 @@ export default function HomePage() {
   const [showResearchForm, setShowResearchForm] = useState(false)
   const { isAuthenticated } = useAuth()
   const router = useRouter()
+
+  // Redirect logged-in users to dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/dashboard')
+    }
+  }, [isAuthenticated, router])
 
   const handleStartResearch = () => {
     if (isAuthenticated) {
@@ -52,8 +58,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      <Header />
-      
       {/* Hero Section */}
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">

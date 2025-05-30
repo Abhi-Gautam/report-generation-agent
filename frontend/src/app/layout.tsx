@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { Providers } from '@/components/providers'
 import { Toaster } from '@/components/ui/toaster'
+import { Header } from '@/components/header'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <div className="min-h-screen research-gradient">
+            <Header />
             {children}
             <Toaster />
           </div>
