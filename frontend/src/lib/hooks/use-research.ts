@@ -175,7 +175,6 @@ export function useResearchGeneration() {
       const projectId = projectResult.data.id
 
       setCurrentStep('Starting research generation...')
-      setProgress(10)
 
       // Step 2: Start research generation
       const generationResult = await generateResearchMutation.mutateAsync(projectId)
@@ -190,7 +189,6 @@ export function useResearchGeneration() {
       }
 
       setCurrentStep('Research agents are working...')
-      setProgress(15)
 
     } catch (error) {
       setStatus('error')
