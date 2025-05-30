@@ -36,7 +36,7 @@ interface ProgressUpdate {
 
 type GenerationStatus = 'idle' | 'generating' | 'completed' | 'error'
 
-export function useResearchGeneration() {
+export function useResearchGeneration(onClose?: () => void) {
   const [progress, setProgress] = useState(0)
   const [currentStep, setCurrentStep] = useState('')
   const [status, setStatus] = useState<GenerationStatus>('idle')
@@ -92,6 +92,7 @@ export function useResearchGeneration() {
         setResult(message.payload)
         setProgress(100)
         setCurrentStep('Research completed successfully!')
+        onClose()
         break
 
       case 'ERROR':

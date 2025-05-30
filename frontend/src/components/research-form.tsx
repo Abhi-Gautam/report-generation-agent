@@ -32,7 +32,7 @@ export function ResearchForm({ onClose }: ResearchFormProps) {
     currentStep, 
     isGenerating,
     result 
-  } = useResearchGeneration()
+  } = useResearchGeneration(onClose)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
