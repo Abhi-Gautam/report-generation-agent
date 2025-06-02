@@ -38,6 +38,7 @@ model Project {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions    ResearchSession[]
   files       ProjectFile[]
+  sections     ReportSection[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -134,6 +135,22 @@ model AgentMemory {
   expiresAt DateTime?
 
   @@map("agent_memory")
+}
+
+model ReportSection {
+  id        String   @id @default(cuid())
+  order     Int
+  title     String
+  content   String   @db.Text
+  type      String   @default("TEXT")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String   @map("project_id")
+
+  @@index([projectId, order])
+  @@map("report_sections")
 }
 
 enum ProjectStatus {

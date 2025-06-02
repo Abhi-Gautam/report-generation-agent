@@ -6,6 +6,14 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seeding...');
 
+  // --- Clean up existing data (order matters due to foreign key constraints) ---
+  await prisma.reportSection.deleteMany({});
+  await prisma.project.deleteMany({});
+  await prisma.userPreference.deleteMany({});
+  await prisma.researchSource.deleteMany({});
+  await prisma.user.deleteMany({});
+  console.log('🧹 Cleared existing data (ReportSections, Projects, UserPreferences, ResearchSources, Users)');
+
   // Hash password for all users (using a simple password for demo purposes)
   const hashedPassword = await bcrypt.hash('password123', 10);
 
@@ -102,7 +110,7 @@ async function main() {
   console.log('👥 Creating users...');
   
   // Create users one by one to get their IDs for creating related data
-  const createdUsers = [];
+  const createdUsers: any[] = [];
   for (const userData of users) {
     const user = await prisma.user.create({
       data: userData,
@@ -197,7 +205,56 @@ async function main() {
     const project = await prisma.project.create({
       data: projectData,
     });
-    console.log(`   ✓ Created project: ${project.title} for user ${createdUsers.find(u => u.id === project.userId)?.name}`);
+    console.log(`   ✓ Created project: ${project.title} for user ${createdUsers.find((u: any) => u.id === project.userId)?.name}`);
+
+    // --- Seed Report Sections for each project ---
+    // Only add sections for a few selected projects for demo
+    if (["Climate Change Impact on Agriculture", "Quantum Computing Fundamentals", "Global Economic Trends 2025"].includes(project.title)) {
+      const sectionsData = [
+        {
+          projectId: project.id,
+          order: 1,
+          title: 'Abstract',
+          type: 'ABSTRACT',
+          content: `\\begin{abstract}\nThis paper provides an overview of ${project.title}.\\end{abstract}`,
+          metadata: {},
+        },
+        {
+          projectId: project.id,
+          order: 2,
+          title: 'Introduction',
+          type: 'INTRODUCTION',
+          content: `\\section*{Introduction}\nThis section introduces the topic: ${project.topic}.`,
+          metadata: {},
+        },
+        {
+          projectId: project.id,
+          order: 3,
+          title: 'Main Discussion',
+          type: 'TEXT',
+          content: `\\section{Main Discussion}\nDetailed discussion about ${project.title}.`,
+          metadata: {},
+        },
+        {
+          projectId: project.id,
+          order: 4,
+          title: 'Conclusion',
+          type: 'CONCLUSION',
+          content: `\\section*{Conclusion}\nSummary and future work for ${project.title}.`,
+          metadata: {},
+        },
+        {
+          projectId: project.id,
+          order: 5,
+          title: 'References',
+          type: 'REFERENCES',
+          content: `\\begin{thebibliography}{9}\n\\bibitem{ref1} Example Reference for ${project.title}.\\end{thebibliography}`,
+          metadata: {},
+        },
+      ];
+      await prisma.reportSection.createMany({ data: sectionsData });
+      console.log(`      • Created ${sectionsData.length} report sections for project: ${project.title}`);
+    }
   }
 
   console.log('⚙️ Creating user preferences...');
@@ -205,7 +262,7 @@ async function main() {
   // Create user preferences for some users
   const userPreferences = [
     {
-      userId: createdUsers[4].id, // Premium user
+      userId: createdUsers[4]?.id, // Premium user
       citationStyle: 'MLA',
       writingStyle: 'ACADEMIC',
       detailLevel: 'DETAILED',
@@ -213,7 +270,7 @@ async function main() {
       sourceTypes: ['ACADEMIC', 'NEWS', 'BOOKS'],
     },
     {
-      userId: createdUsers[6].id, // Enterprise user
+      userId: createdUsers[6]?.id, // Enterprise user
       citationStyle: 'APA',
       writingStyle: 'PROFESSIONAL',
       detailLevel: 'COMPREHENSIVE',
@@ -226,7 +283,8 @@ async function main() {
     await prisma.userPreference.create({
       data: prefData,
     });
-    console.log(`   ✓ Created preferences for user ${createdUsers.find(u => u.id === prefData.userId)?.name}`);
+    const user = createdUsers.find((u: any) => u.id === prefData.userId);
+    console.log(`   ✓ Created preferences for user ${user?.name}`);
   }
 
   console.log('🔍 Creating sample research sources...');
