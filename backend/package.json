@@ -20,9 +20,11 @@
   "dependencies": {
     "@google/generative-ai": "latest",
     "@prisma/client": "latest",
+    "archiver": "latest",
     "axios": "latest",
     "bcryptjs": "latest",
     "cheerio": "latest",
+    "chromadb": "latest",
     "compromise": "latest",
     "cors": "latest",
     "dotenv": "latest",
@@ -45,6 +47,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@types/archiver": "latest",
     "@types/bcryptjs": "^3.0.0",
     "@types/cors": "latest",
     "@types/express": "latest",

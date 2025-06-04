@@ -12,12 +12,14 @@ import projectRoutes from './routes/projects';
 import userRoutes from './routes/users';
 import researchRoutes from './routes/research';
 import authRoutes from './routes/auth';
+import sectionsRoutes from './routes/sections';
 
 // Import services
 import { DatabaseService } from './services/database';
 import { RedisService } from './services/redis';
 import { WebSocketService } from './services/websocket';
 import { LoggerService } from './services/logger';
+import { chromaService } from './services/chromaService';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -42,6 +44,7 @@ class Application {
     
     this.initializeDatabase();
     this.initializeRedis();
+    this.initializeChroma();
     this.initializeSocket();
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -67,6 +70,16 @@ class Application {
     } catch (error) {
       this.logger.error('Failed to connect to Redis:', error);
       // Redis is optional, continue without it
+    }
+  }
+
+  private async initializeChroma(): Promise<void> {
+    try {
+      await chromaService.initialize();
+      this.logger.info('Connected to ChromaDB');
+    } catch (error) {
+      this.logger.error('Failed to connect to ChromaDB:', error);
+      // ChromaDB is optional, continue without it
     }
   }
 
@@ -127,6 +140,7 @@ class Application {
     // Make projects route public for demo (remove auth middleware)
     this.app.use('/api/projects', projectRoutes);
     this.app.use('/api/research', researchRoutes);
+    this.app.use('/api/sections', sectionsRoutes);
 
     // Catch-all route
     this.app.use('/{*any}', (req, res) => {

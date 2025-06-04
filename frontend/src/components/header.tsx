@@ -76,10 +76,10 @@ export function Header() {
                       className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50"
                     >
                       <div className="p-2">
-                        <Link href="/dashboard">
+                        <Link href="/reports">
                           <Button variant="ghost" className="w-full justify-start">
                             <FileText className="h-4 w-4 mr-2" />
-                            My Projects
+                            My Reports
                           </Button>
                         </Link>
                         <Button 

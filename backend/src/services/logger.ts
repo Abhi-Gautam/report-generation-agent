@@ -49,3 +49,6 @@ export class LoggerService {
     this.logger.http(message, meta);
   }
 }
+
+// Export singleton instance
+export const logger = new LoggerService();

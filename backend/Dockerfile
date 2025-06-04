@@ -2,7 +2,7 @@ FROM node:24-alpine
 
 WORKDIR /app/backend
 
-# Install system dependencies
+# Install system dependencies including minimal LaTeX
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -10,6 +10,12 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
+    texlive \
+    texlive-luatex \
+    texlive-xetex \
+    py3-pygments \
+    zip \
+    unzip \
     && rm -rf /var/cache/apk/*
 
 # Tell Puppeteer to skip installing Chromium. We'll be using the installed package.

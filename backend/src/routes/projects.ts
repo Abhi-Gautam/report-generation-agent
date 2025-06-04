@@ -132,7 +132,10 @@ router.get('/:id', async (req, res): Promise<void> => {
           },
           orderBy: { createdAt: 'desc' }
         },
-        files: true
+        files: true,
+        sections: {
+          orderBy: { order: 'asc' }
+        }
       }
     });
 

@@ -15,9 +15,8 @@ services:
       # Mount source code for hot reload
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
-      # Preserve container's node_modules only (remove .next mount)
       - /app/node_modules
-    user: "1001:1001"  # Use same user as in Dockerfile
+    user: "1001:1001"
     depends_on:
       - backend
     networks:
@@ -37,7 +36,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
-      - CHROMA_URL=http://chromadb:8000
+      - CHROMA_DB_URL=http://chromadb:8000
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - AUTO_SEED=${AUTO_SEED:-false}

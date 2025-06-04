@@ -95,8 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(data.data.user)
       
-      // Redirect to dashboard
-      router.push('/dashboard')
+      // Redirect to reports
+      router.push('/reports')
     } finally {
       setIsLoading(false)
     }
@@ -124,8 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(data.data.user)
       
-      // Redirect to dashboard
-      router.push('/dashboard')
+      // Redirect to reports
+      router.push('/reports')
     } finally {
       setIsLoading(false)
     }

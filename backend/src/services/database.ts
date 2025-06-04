@@ -36,6 +36,31 @@ export class DatabaseService {
     return this.prisma;
   }
 
+  // Add direct access to Prisma models
+  get project() {
+    return this.prisma.project;
+  }
+
+  get reportSection() {
+    return this.prisma.reportSection;
+  }
+
+  get researchSession() {
+    return this.prisma.researchSession;
+  }
+
+  get projectFile() {
+    return this.prisma.projectFile;
+  }
+
+  get user() {
+    return this.prisma.user;
+  }
+
+  get $transaction() {
+    return this.prisma.$transaction.bind(this.prisma);
+  }
+
   // Health check
   async isHealthy(): Promise<boolean> {
     try {
@@ -52,3 +77,6 @@ export class DatabaseService {
     return this.prisma.$transaction(fn);
   }
 }
+
+// Export singleton instance
+export const database = new DatabaseService();
