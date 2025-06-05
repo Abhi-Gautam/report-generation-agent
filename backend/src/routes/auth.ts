@@ -214,57 +214,5 @@ router.get('/me', async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/auth/demo-login - Demo login (no password required)
-router.post('/demo-login', async (_req, res): Promise<void> => {
-  try {
-    const email = 'demo@researchagent.com';
-    
-    // Find or create demo user
-    let user = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email,
-          name: 'Demo User',
-          password: await bcrypt.hash('demoPassword123', 12)
-        }
-      });
-    }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
-
-    logger.info(`Demo user logged in: ${user.email}`);
-
-    res.json({
-      success: true,
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          hasSubscription: user.hasSubscription,
-          subscriptionTier: user.subscriptionTier
-        },
-        token
-      },
-      message: 'Demo login successful'
-    });
-
-  } catch (error) {
-    logger.error('Demo login failed:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Demo login failed'
-    });
-  }
-});
 
 export default router;

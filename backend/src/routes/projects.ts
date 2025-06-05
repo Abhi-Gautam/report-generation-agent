@@ -114,11 +114,10 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res): Prom
 });
 
 // GET /api/projects/:id - Get project details
-router.get('/:id', async (req, res): Promise<void> => {
+router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    // Use demo user for now (remove auth check temporarily)
-    const userId = 'demo-user-123';
+    const userId = req.user!.id;
 
     const project = await prisma.project.findFirst({
       where: {
@@ -142,7 +141,7 @@ router.get('/:id', async (req, res): Promise<void> => {
     if (!project) {
       res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: 'Project not found or you do not have permission to access it'
       });
       return;
     }
@@ -367,11 +366,10 @@ router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest
 });
 
 // GET /api/projects/:id/status - Get generation status
-router.get('/:id/status', async (req, res): Promise<void> => {
+router.get('/:id/status', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    // Use demo user for now (remove auth check temporarily)
-    const userId = 'demo-user-123';
+    const userId = req.user!.id;
 
     const project = await prisma.project.findFirst({
       where: {
@@ -389,7 +387,7 @@ router.get('/:id/status', async (req, res): Promise<void> => {
     if (!project) {
       res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: 'Project not found or you do not have permission to access it'
       });
       return;
     }
@@ -421,21 +419,15 @@ router.get('/:id/status', async (req, res): Promise<void> => {
 });
 
 // GET /api/projects/:id/download - Download generated PDF
-router.get('/:id/download', async (req, res): Promise<void> => {
+router.get('/:id/download', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    // Use demo user for now (remove auth check temporarily)
-    // const userId = req.user?.id;
-
-    // if (!userId) {
-    //   res.status(401).json({ success: false, error: 'User not authenticated' });
-    //   return;
-    // }
+    const userId = req.user!.id;
 
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        // userId: userId  // Comment out for demo
+        userId: userId
       },
       include: {
         files: {
@@ -449,7 +441,7 @@ router.get('/:id/download', async (req, res): Promise<void> => {
     if (!project) {
       res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: 'Project not found or you do not have permission to access it'
       });
       return;
     }
@@ -503,11 +495,10 @@ router.get('/:id/download', async (req, res): Promise<void> => {
 });
 
 // DELETE /api/projects/:id - Delete project
-router.delete('/:id', async (req, res): Promise<void> => {
+router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const projectId = req.params.id;
-    // Use demo user for now (remove auth check temporarily)
-    const userId = 'demo-user-123';
+    const userId = req.user!.id;
 
     const project = await prisma.project.findFirst({
       where: {
@@ -519,7 +510,7 @@ router.delete('/:id', async (req, res): Promise<void> => {
     if (!project) {
       res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: 'Project not found or you do not have permission to delete it'
       });
       return;
     }

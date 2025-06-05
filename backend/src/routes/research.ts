@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient, ToolUsage, ResearchSession, Project } from '@prisma/client'; // Import necessary types
 import { LoggerService } from '../services/logger';
+import { authenticateToken } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/request';
 
 const router = Router();
@@ -8,15 +9,10 @@ const prisma = new PrismaClient();
 const logger = new LoggerService();
 
 // GET /api/research/sessions/:id - Get research session details
-router.get('/sessions/:id', async (req: AuthenticatedRequest, res): Promise<void> => {
+router.get('/sessions/:id', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const sessionId = req.params.id;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    const userId = req.user!.id;
 
     const session = await prisma.researchSession.findFirst({
       where: {
@@ -64,15 +60,10 @@ router.get('/sessions/:id', async (req: AuthenticatedRequest, res): Promise<void
 });
 
 // GET /api/research/sessions/:id/logs - Get session agent logs
-router.get('/sessions/:id/logs', async (req: AuthenticatedRequest, res): Promise<void> => {
+router.get('/sessions/:id/logs', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const sessionId = req.params.id;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    const userId = req.user!.id;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = (page - 1) * limit;
@@ -124,15 +115,10 @@ router.get('/sessions/:id/logs', async (req: AuthenticatedRequest, res): Promise
 });
 
 // GET /api/research/sessions/:id/tools - Get session tool usage
-router.get('/sessions/:id/tools', async (req: AuthenticatedRequest, res): Promise<void> => {
+router.get('/sessions/:id/tools', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
     const sessionId = req.params.id;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    const userId = req.user!.id;
 
     const session = await prisma.researchSession.findFirst({
       where: {
@@ -249,15 +235,9 @@ router.get('/sources', async (req, res): Promise<void> => {
 });
 
 // GET /api/research/analytics - Get research analytics
-router.get('/analytics', async (req: AuthenticatedRequest, res): Promise<void> => {
+router.get('/analytics', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
-    const userId = req.user?.id;
-
-    if (!userId) {
-      // Analytics might be public or require auth. Assuming auth for now.
-      res.status(401).json({ success: false, error: 'User not authenticated' });
-      return;
-    }
+    const userId = req.user!.id;
     const timeRange = req.query.timeRange as string || '7d';
 
     // Calculate date range

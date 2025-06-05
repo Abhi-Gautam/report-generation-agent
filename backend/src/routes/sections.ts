@@ -5,13 +5,34 @@ import { projectStorage } from '../services/projectStorage';
 import { chromaService } from '../services/chromaService';
 import { latexCompiler } from '../services/latexCompiler';
 import { logger } from '../services/logger';
+import { authenticateToken } from '../middleware/auth';
+import { AuthenticatedRequest } from '../types/request';
 
 const router = Router();
 
+// Helper function to verify project ownership
+async function verifyProjectOwnership(projectId: string, userId: string): Promise<boolean> {
+  const project = await database.project.findFirst({
+    where: { id: projectId, userId }
+  });
+  return !!project;
+}
+
 // GET /api/sections/:projectId - Get all sections for a project
-router.get('/:projectId', async (req: Request, res: Response): Promise<void> => {
+router.get('/:projectId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
+    const userId = req.user!.id;
+    
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
     
     const sections = await database.reportSection.findMany({
       where: { projectId },
@@ -32,9 +53,10 @@ router.get('/:projectId', async (req: Request, res: Response): Promise<void> => 
 });
 
 // POST /api/sections/:projectId - Create a new section
-router.post('/:projectId', async (req: Request, res: Response): Promise<void> => {
+router.post('/:projectId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
+    const userId = req.user!.id;
     const { title, content, type = 'TEXT', order, metadata } = req.body;
 
     if (!title || !content) {
@@ -45,15 +67,12 @@ router.post('/:projectId', async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Check if project exists
-    const project = await database.project.findUnique({
-      where: { id: projectId }
-    });
-
-    if (!project) {
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
       res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: 'Project not found or you do not have permission to access it'
       });
       return;
     }
@@ -106,10 +125,21 @@ router.post('/:projectId', async (req: Request, res: Response): Promise<void> =>
 });
 
 // PUT /api/sections/:projectId/:sectionId - Update a section
-router.put('/:projectId/:sectionId', async (req: Request, res: Response): Promise<void> => {
+router.put('/:projectId/:sectionId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId, sectionId } = req.params;
+    const userId = req.user!.id;
     const { title, content, type, order, metadata } = req.body;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
 
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
@@ -163,9 +193,20 @@ router.put('/:projectId/:sectionId', async (req: Request, res: Response): Promis
 });
 
 // DELETE /api/sections/:projectId/:sectionId - Delete a section
-router.delete('/:projectId/:sectionId', async (req: Request, res: Response): Promise<void> => {
+router.delete('/:projectId/:sectionId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId, sectionId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
 
     await database.reportSection.delete({
       where: { 
@@ -194,9 +235,20 @@ router.delete('/:projectId/:sectionId', async (req: Request, res: Response): Pro
 });
 
 // GET /api/sections/:projectId/:sectionId - Get a specific section
-router.get('/:projectId/:sectionId', async (req: Request, res: Response): Promise<void> => {
+router.get('/:projectId/:sectionId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId, sectionId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
 
     const section = await database.reportSection.findUnique({
       where: { 
@@ -269,10 +321,21 @@ router.post('/:projectId/reorder', async (req: Request, res: Response): Promise<
 });
 
 // POST /api/sections/:projectId/compile - Compile all sections to PDF
-router.post('/:projectId/compile', async (req: Request, res: Response): Promise<void> => {
+router.post('/:projectId/compile', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
+    const userId = req.user!.id;
     const { format = 'pdf' } = req.body;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
 
     // Generate main.tex file
     const mainTexPath = await projectStorage.generateMainTexFile(projectId);
@@ -321,9 +384,20 @@ router.post('/:projectId/compile', async (req: Request, res: Response): Promise<
 });
 
 // GET /api/sections/:projectId/download/:format - Download project in various formats
-router.get('/:projectId/download/:format', async (req: Request, res: Response): Promise<void> => {
+router.get('/:projectId/download/:format', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId, format } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
 
     switch (format) {
       case 'pdf':
@@ -381,9 +455,20 @@ router.get('/:projectId/download/:format', async (req: Request, res: Response): 
 });
 
 // GET /api/sections/:projectId/suggestions/:sectionId - Get content suggestions for a section
-router.get('/:projectId/suggestions/:sectionId', async (req: Request, res: Response): Promise<void> => {
+router.get('/:projectId/suggestions/:sectionId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId, sectionId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
 
     const section = await database.reportSection.findUnique({
       where: { id: sectionId, projectId }
@@ -416,9 +501,20 @@ router.get('/:projectId/suggestions/:sectionId', async (req: Request, res: Respo
 });
 
 // POST /api/sections/:projectId/generate-structure - Generate report structure
-router.post('/:projectId/generate-structure', async (req: Request, res: Response): Promise<void> => {
+router.post('/:projectId/generate-structure', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
     const { reportType, academicLevel, fieldOfStudy, wordLimit, customSections } = req.body;
 
     const { reportStructurer } = await import('../tools/reportStructurer');
@@ -480,9 +576,20 @@ router.post('/:projectId/generate-structure', async (req: Request, res: Response
 });
 
 // POST /api/sections/:projectId/generate-table - Generate table for a section
-router.post('/:projectId/generate-table', async (req: Request, res: Response): Promise<void> => {
+router.post('/:projectId/generate-table', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
     const { data, options, sectionId } = req.body;
 
     const { tableGenerator } = await import('../tools/tableGenerator');
@@ -524,9 +631,20 @@ router.post('/:projectId/generate-table', async (req: Request, res: Response): P
 });
 
 // POST /api/sections/:projectId/generate-chart - Generate chart for a section
-router.post('/:projectId/generate-chart', async (req: Request, res: Response): Promise<void> => {
+router.post('/:projectId/generate-chart', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify project ownership
+    const hasAccess = await verifyProjectOwnership(projectId, userId);
+    if (!hasAccess) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found or you do not have permission to access it'
+      });
+      return;
+    }
     const { data, options, sectionId } = req.body;
 
     const { chartGenerator } = await import('../tools/chartGenerator');
