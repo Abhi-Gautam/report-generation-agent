@@ -37,10 +37,9 @@ export class ChromaService {
   private collectionName = 'research_content';
 
   constructor() {
-    // Initialize ChromaDB client
-    this.client = new ChromaClient({
-      path: process.env.CHROMA_DB_URL || 'http://localhost:8000'
-    });
+    // Initialize ChromaDB client with default configuration
+    // ChromaDB defaults to http://localhost:8000
+    this.client = new ChromaClient();
   }
 
   async initialize(): Promise<void> {
@@ -169,7 +168,9 @@ export class ChromaService {
         if (excludeIds.includes(id)) continue;
         
         // Calculate similarity score (1 - distance for cosine similarity)
-        const similarity = 1 - distance;
+        // Handle null distance
+        const validDistance = distance ?? 1;
+        const similarity = 1 - validDistance;
         
         // Filter by minimum similarity
         if (similarity >= minSimilarity) {
@@ -177,7 +178,7 @@ export class ChromaService {
             id,
             content: content || '',
             metadata: metadata || {},
-            distance,
+            distance: validDistance,
             similarity
           });
         }
