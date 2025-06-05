@@ -7,15 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { useToast } from '@/lib/hooks/use-toast'
+import { useRouter } from 'next/navigation'
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
   mode: 'login' | 'register'
   onSwitchMode: (mode: 'login' | 'register') => void
+  redirectTo?: string
 }
 
-export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, mode, onSwitchMode, redirectTo = '/reports' }: AuthModalProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -23,6 +25,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   
   const { login, register, isLoading } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,6 +43,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       })
       
       onClose()
+      router.push(redirectTo)
     } catch (error) {
       toast({
         title: "Error",

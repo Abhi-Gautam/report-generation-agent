@@ -86,7 +86,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {reports.map((report) => (
+          {reports.map((report: any) => (
             <Card 
               key={report.id} 
               className={`p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 ${

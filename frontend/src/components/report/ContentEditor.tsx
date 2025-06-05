@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import { loader } from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import { Save, Eye, Code, Type, Table, BarChart3 } from 'lucide-react';
 import { SimilarContentSuggestions } from './SimilarContentSuggestions';
@@ -46,13 +47,15 @@ export function ContentEditor({ section, onContentChange, isUpdating }: ContentE
     if (editorRef.current) {
       const editor = editorRef.current;
       const selection = editor.getSelection();
-      const range = new monaco.Range(
-        selection.startLineNumber,
-        selection.startColumn,
-        selection.endLineNumber,
-        selection.endColumn
-      );
-      editor.executeEdits('', [{ range, text: template }]);
+      if (selection) {
+        const range = {
+          startLineNumber: selection.startLineNumber,
+          startColumn: selection.startColumn,
+          endLineNumber: selection.endLineNumber,
+          endColumn: selection.endColumn
+        };
+        editor.executeEdits('', [{ range, text: template }]);
+      }
     }
   };
 

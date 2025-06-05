@@ -1,3 +1,113 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Upload, Download, FileText, X, Table } from 'lucide-react';
+import * as XLSX from 'xlsx';
+
+interface ParsedData {
+  headers: string[];
+  data: any[];
+}
+
+interface DataUploaderProps {
+  onDataParsed: (data: ParsedData) => void;
+}
+
+export function DataUploader({ onDataParsed }: DataUploaderProps) {
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [parsedData, setParsedData] = useState<ParsedData | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const maxSize = 10 * 1024 * 1024; // 10MB
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      const file = acceptedFiles[0];
+      setUploadedFiles([file]);
+      setIsProcessing(true);
+      
+      try {
+        const data = await parseFile(file);
+        setParsedData(data);
+        onDataParsed(data);
+      } catch (error) {
+        console.error('Error parsing file:', error);
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  }, [onDataParsed]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'text/csv': ['.csv'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls']
+    },
+    maxSize,
+    multiple: false
+  });
+
+  const parseFile = async (file: File): Promise<ParsedData> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const data = e.target?.result;
+          let workbook: XLSX.WorkBook;
+          
+          if (file.name.endsWith('.csv')) {
+            workbook = XLSX.read(data, { type: 'string' });
+          } else {
+            workbook = XLSX.read(data, { type: 'array' });
+          }
+          
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          if (jsonData.length === 0) {
+            reject(new Error('No data found in file'));
+            return;
+          }
+          
+          const headers = jsonData[0] as string[];
+          const rows = jsonData.slice(1);
+          
+          const parsedRows = rows.map(row => {
+            const obj: any = {};
+            headers.forEach((header, index) => {
+              obj[header] = (row as any[])[index] || '';
+            });
+            return obj;
+          });
+          
+          resolve({
+            headers,
+            data: parsedRows
+          });
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      
+      if (file.name.endsWith('.csv')) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    });
+  };
+
+  const removeFile = () => {
+    setUploadedFiles([]);
     setParsedData(null);
   };
 

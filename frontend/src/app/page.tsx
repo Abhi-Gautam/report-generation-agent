@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { BookOpen, Brain, Zap, Target, ArrowRight, Github, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ResearchForm } from '@/components/research-form'
+import { AuthModal } from '@/components/auth-modal'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -14,7 +14,8 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 export default function HomePage() {
-  const [showResearchForm, setShowResearchForm] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const { isAuthenticated } = useAuth()
   const router = useRouter()
 
@@ -27,10 +28,16 @@ export default function HomePage() {
 
   const handleStartResearch = () => {
     if (isAuthenticated) {
-      router.push('/dashboard')
+      router.push('/reports')
     } else {
-      setShowResearchForm(true)
+      setShowAuthModal(true)
+      setAuthMode('login')
     }
+  }
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false)
+    router.push('/reports')
   }
 
   const features = [
@@ -83,7 +90,7 @@ export default function HomePage() {
                 <Button 
                   size="lg" 
                   className="text-lg px-8 py-6 animate-pulse-glow"
-                  onClick={() => setShowResearchForm(true)}
+                  onClick={handleStartResearch}
                 >
                   Start Research <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
@@ -234,16 +241,20 @@ export default function HomePage() {
               className="text-lg px-12 py-6 animate-pulse-glow"
               onClick={handleStartResearch}
             >
-              {isAuthenticated ? 'Go to Dashboard' : 'Generate Your First Paper'} <ArrowRight className="ml-2 h-5 w-5" />
+              {isAuthenticated ? 'Go to Reports' : 'Generate Your First Paper'} <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </motion.div>
         </div>
       </section>
 
-      {/* Research Form Modal - Only show if not authenticated */}
-      {showResearchForm && !isAuthenticated && (
-        <ResearchForm onClose={() => setShowResearchForm(false)} />
-      )}
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)}
+        mode={authMode}
+        onSwitchMode={setAuthMode}
+        redirectTo="/reports"
+      />
     </div>
   )
 }

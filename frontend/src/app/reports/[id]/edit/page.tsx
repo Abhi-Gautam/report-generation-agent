@@ -35,7 +35,7 @@ export default function EditReportPage() {
     }
   }, [sections, selectedSectionId]);
 
-  const selectedSection = sections.find(s => s.id === selectedSectionId);
+  const selectedSection = sections.find((s: any) => s.id === selectedSectionId);
 
   const handleSectionSelect = (sectionId: string) => {
     if (hasUnsavedChanges) {
@@ -50,7 +50,7 @@ export default function EditReportPage() {
   const handleContentChange = async (content: string) => {
     if (selectedSection) {
       setHasUnsavedChanges(true);
-      await updateSection(selectedSection.id, { content });
+      await updateSection({ sectionId: selectedSection.id, updates: { content } });
       setHasUnsavedChanges(false);
     }
   };
