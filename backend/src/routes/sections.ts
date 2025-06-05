@@ -562,7 +562,7 @@ router.post('/:projectId/generate-structure', authenticateToken, async (req: Aut
       data: {
         structure: result.structure,
         sections,
-        latexTemplate: result.latex_template,
+        latexTemplate: result.latexTemplate,
         guidelines: result.guidelines
       }
     });

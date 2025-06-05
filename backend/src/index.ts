@@ -13,6 +13,7 @@ import userRoutes from './routes/users';
 import researchRoutes from './routes/research';
 import authRoutes from './routes/auth';
 import sectionsRoutes from './routes/sections';
+import reportTypesRoutes from './routes/reportTypes';
 
 // Import services
 import { DatabaseService } from './services/database';
@@ -135,9 +136,10 @@ class Application {
   private initializeRoutes(): void {
     // Public routes
     this.app.use('/api/auth', authRoutes);
+    this.app.use('/api/report-types', reportTypesRoutes);
+    
+    // Protected routes
     this.app.use('/api/users', userRoutes);
-
-    // Make projects route public for demo (remove auth middleware)
     this.app.use('/api/projects', projectRoutes);
     this.app.use('/api/research', researchRoutes);
     this.app.use('/api/sections', sectionsRoutes);

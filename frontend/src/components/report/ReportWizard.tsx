@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
+import { useReportTypes } from '@/lib/hooks/use-report-types';
 
 interface ReportWizardProps {
   onSubmit: (data: {
@@ -27,14 +28,6 @@ const steps = [
   { id: 5, title: 'Review', description: 'Confirm your settings' }
 ];
 
-const reportTypes = [
-  { id: 'research_paper', name: 'Research Paper', description: 'Academic research with methodology' },
-  { id: 'literature_review', name: 'Literature Review', description: 'Analysis of existing research' },
-  { id: 'case_study', name: 'Case Study', description: 'In-depth analysis of specific cases' },
-  { id: 'thesis', name: 'Thesis/Dissertation', description: 'Comprehensive academic work' },
-  { id: 'lab_report', name: 'Lab Report', description: 'Scientific experiment documentation' },
-  { id: 'white_paper', name: 'White Paper', description: 'Professional industry report' }
-];
 
 const academicLevels = [
   { id: 'high_school', name: 'High School' },
@@ -55,6 +48,9 @@ export function ReportWizard({ onSubmit, isLoading, onCancel }: ReportWizardProp
     wordLimit: 5000,
     customSections: [] as string[]
   });
+
+  // Fetch report types from API
+  const { data: reportTypes, isLoading: isLoadingReportTypes, error: reportTypesError } = useReportTypes();
 
   const updateFormData = (updates: Partial<typeof formData>) => {
     setFormData(prev => ({ ...prev, ...updates }));
@@ -125,25 +121,56 @@ export function ReportWizard({ onSubmit, isLoading, onCancel }: ReportWizardProp
         return (
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Choose Report Type</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {reportTypes.map((type) => (
-                <Card
-                  key={type.id}
-                  className={`p-4 cursor-pointer border-2 transition-colors ${
-                    formData.reportType === type.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => updateFormData({ reportType: type.id })}
-                >
-                  <h4 className="font-medium text-gray-900">{type.name}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{type.description}</p>
-                  {formData.reportType === type.id && (
-                    <Check className="w-5 h-5 text-blue-600 mt-2" />
-                  )}
-                </Card>
-              ))}
-            </div>
+            {isLoadingReportTypes ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                <span className="ml-2 text-gray-600">Loading report types...</span>
+              </div>
+            ) : reportTypesError ? (
+              <div className="text-center py-8">
+                <p className="text-red-600">Failed to load report types. Please try again.</p>
+              </div>
+            ) : reportTypes && reportTypes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {reportTypes.map((type) => (
+                  <Card
+                    key={type.value}
+                    className={`p-4 cursor-pointer border-2 transition-colors ${
+                      formData.reportType === type.value
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => updateFormData({ reportType: type.value })}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{type.label}</h4>
+                        <p className="text-sm text-gray-600 mt-1">{type.description}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            type.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
+                            type.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {type.difficulty}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {type.estimatedTime[0]}-{type.estimatedTime[1]}h
+                          </span>
+                        </div>
+                      </div>
+                      {formData.reportType === type.value && (
+                        <Check className="w-5 h-5 text-blue-600 ml-2 flex-shrink-0" />
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-600">No report types available at the moment.</p>
+              </div>
+            )}
           </div>
         );
 
@@ -230,7 +257,7 @@ export function ReportWizard({ onSubmit, isLoading, onCancel }: ReportWizardProp
         );
 
       case 5:
-        const selectedReportType = reportTypes.find(t => t.id === formData.reportType);
+        const selectedReportType = reportTypes?.find(t => t.value === formData.reportType);
         const selectedAcademicLevel = academicLevels.find(l => l.id === formData.academicLevel);
         
         return (
@@ -244,7 +271,7 @@ export function ReportWizard({ onSubmit, isLoading, onCancel }: ReportWizardProp
                 <span className="font-medium">Topic:</span> {formData.topic}
               </div>
               <div>
-                <span className="font-medium">Type:</span> {selectedReportType?.name}
+                <span className="font-medium">Type:</span> {selectedReportType?.label}
               </div>
               <div>
                 <span className="font-medium">Academic Level:</span> {selectedAcademicLevel?.name}
