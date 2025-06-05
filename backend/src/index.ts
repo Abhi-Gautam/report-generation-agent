@@ -20,7 +20,6 @@ import { DatabaseService } from './services/database';
 import { RedisService } from './services/redis';
 import { WebSocketService } from './services/websocket';
 import { LoggerService } from './services/logger';
-import { chromaService } from './services/chromaService';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -45,7 +44,6 @@ class Application {
     
     this.initializeDatabase();
     this.initializeRedis();
-    this.initializeChroma();
     this.initializeSocket();
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -74,15 +72,6 @@ class Application {
     }
   }
 
-  private async initializeChroma(): Promise<void> {
-    try {
-      await chromaService.initialize();
-      this.logger.info('Connected to ChromaDB');
-    } catch (error) {
-      this.logger.error('Failed to connect to ChromaDB:', error);
-      // ChromaDB is optional, continue without it
-    }
-  }
 
   private initializeSocket(): void {
     this.io = new SocketIOServer(this.server, {

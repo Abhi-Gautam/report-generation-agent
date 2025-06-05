@@ -28,7 +28,6 @@ services:
       - REDIS_URL=${REDIS_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
-      - CHROMA_URL=http://chromadb:8000
       - JWT_SECRET=${JWT_SECRET}
     volumes:
       - ./backend/output:/app/output
@@ -36,7 +35,6 @@ services:
     depends_on:
       - postgres
       - redis
-      - chromadb
     restart: unless-stopped
     networks:
       - research_network
@@ -65,19 +63,6 @@ services:
     networks:
       - research_network
 
-  # ChromaDB for vector embeddings
-  chromadb:
-    image: chromadb/chroma:latest
-    environment:
-      - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_PORT=8000
-      - PERSIST_DIRECTORY=/chroma/chroma
-    volumes:
-      - chroma_data:/chroma/chroma
-    restart: unless-stopped
-    networks:
-      - research_network
-
   # Nginx reverse proxy
   nginx:
     image: nginx:alpine
@@ -99,8 +84,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  chroma_data:
     driver: local
   nginx_logs:
     driver: local

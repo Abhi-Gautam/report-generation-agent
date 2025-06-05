@@ -24,7 +24,6 @@
     "axios": "latest",
     "bcryptjs": "latest",
     "cheerio": "latest",
-    "chromadb": "latest",
     "compromise": "latest",
     "cors": "latest",
     "dotenv": "latest",

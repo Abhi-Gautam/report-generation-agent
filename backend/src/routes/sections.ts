@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { Request, Response } from 'express';
 import { database } from '../services/database';
 import { projectStorage } from '../services/projectStorage';
-import { chromaService } from '../services/chromaService';
 import { latexCompiler } from '../services/latexCompiler';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
@@ -96,20 +95,6 @@ router.post('/:projectId', authenticateToken, async (req: AuthenticatedRequest, 
       ...metadata
     });
 
-    // Store in ChromaDB for similarity search
-    await chromaService.storeContent({
-      id: `section_${section.id}`,
-      content: `${title}\n\n${content}`,
-      metadata: {
-        projectId,
-        sectionId: section.id,
-        type: 'section',
-        title,
-        tags: metadata?.tags || [],
-        wordCount: content.split(' ').length,
-        createdAt: new Date().toISOString()
-      }
-    });
 
     res.status(201).json({
       success: true,
@@ -164,19 +149,6 @@ router.put('/:projectId/:sectionId', authenticateToken, async (req: Authenticate
         ...metadata
       });
 
-      // Update in ChromaDB
-      await chromaService.updateContent(`section_${sectionId}`, {
-        content: `${title || section.title}\n\n${content}`,
-        metadata: {
-          projectId,
-          sectionId,
-          type: 'section',
-          title: title || section.title,
-          tags: metadata?.tags || [],
-          wordCount: content.split(' ').length,
-          createdAt: section.createdAt.toISOString()
-        }
-      });
     }
 
     res.json({
@@ -218,8 +190,6 @@ router.delete('/:projectId/:sectionId', authenticateToken, async (req: Authentic
     // Delete section file
     await projectStorage.deleteSection(projectId, sectionId);
 
-    // Delete from ChromaDB
-    await chromaService.deleteContent(`section_${sectionId}`);
 
     res.json({
       success: true,
@@ -482,10 +452,8 @@ router.get('/:projectId/suggestions/:sectionId', authenticateToken, async (req: 
       return;
     }
 
-    const suggestions = await chromaService.getContentSuggestions(
-      section.content,
-      projectId
-    );
+    // Content suggestions feature removed (previously used ChromaDB)
+    const suggestions: any[] = [];
 
     res.json({
       success: true,
@@ -590,7 +558,7 @@ router.post('/:projectId/generate-table', authenticateToken, async (req: Authent
       });
       return;
     }
-    const { data, options, sectionId } = req.body;
+    const { data, options } = req.body;
 
     const { tableGenerator } = await import('../tools/tableGenerator');
     
@@ -602,20 +570,6 @@ router.post('/:projectId/generate-table', authenticateToken, async (req: Authent
       }
     });
 
-    // Store table in ChromaDB if successful
-    if (result.content) {
-      await chromaService.storeContent({
-        id: `table_${Date.now()}`,
-        content: result.content,
-        metadata: {
-          projectId,
-          sectionId,
-          type: 'table',
-          title: data.caption || 'Generated Table',
-          createdAt: new Date().toISOString()
-        }
-      });
-    }
 
     res.json({
       success: true,
@@ -645,7 +599,7 @@ router.post('/:projectId/generate-chart', authenticateToken, async (req: Authent
       });
       return;
     }
-    const { data, options, sectionId } = req.body;
+    const { data, options } = req.body;
 
     const { chartGenerator } = await import('../tools/chartGenerator');
     
@@ -658,20 +612,6 @@ router.post('/:projectId/generate-chart', authenticateToken, async (req: Authent
       projectId
     });
 
-    // Store chart in ChromaDB if successful
-    if (result.content) {
-      await chromaService.storeContent({
-        id: `chart_${Date.now()}`,
-        content: result.content,
-        metadata: {
-          projectId,
-          sectionId,
-          type: 'chart',
-          title: options.title || 'Generated Chart',
-          createdAt: new Date().toISOString()
-        }
-      });
-    }
 
     res.json({
       success: true,
