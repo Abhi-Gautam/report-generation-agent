@@ -78,10 +78,10 @@ export function useReports(reportId?: string) {
 
       const project = projectResponse.data.data;
 
-      // Start AI research generation immediately
+      // Start AI research generation immediately with PDF compilation
       const generationResponse = await authApi.post(`/projects/${project.id}/generate`, {
         options: {
-          includeImages: false,
+          includeImages: true,  // Enable PDF generation
           maxSources: 5,
           citationStyle: 'APA'
         }

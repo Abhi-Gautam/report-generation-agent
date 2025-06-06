@@ -2,10 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { PrismaClient, Prisma } from '@prisma/client'; // Correctly import Prisma namespace
 import { ResearchAgent } from '../agents/researchAgent';
+import { LaTeXFormatterAgent } from '../agents/latexFormatterAgent';
+import { CompilationAgent } from '../agents/compilationAgent';
 import { WebSocketService } from '../services/websocket';
 import { LoggerService } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/request';
+import * as path from 'path';
+import * as fs from 'fs';
 // import { v4 as uuidv4 } from 'uuid'; // Unused
 
 const router = Router();
@@ -262,6 +266,26 @@ router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest
         await createReportSectionsFromContent(project.id, result.content, result.outline);
         logger.info(`Finished parsing content into sections for project ${project.id}`);
 
+        // Generate PDF from individual sections using new agents
+        let pdfPath: string | undefined = result.pdfPath;
+        if (preferencesForAgent.includeImages) {
+          logger.info(`Starting enhanced PDF generation from sections for project ${project.id}`);
+          websocketInstance.sendProgressUpdate(session.id, {
+            sessionId: session.id,
+            progress: 90,
+            currentStep: 'Generating PDF from sections',
+            message: 'Creating structured LaTeX document'
+          });
+
+          try {
+            pdfPath = await generatePDFFromSections(project.id, project.title, session.id, websocketInstance);
+            logger.info(`Enhanced PDF generation completed: ${pdfPath}`);
+          } catch (pdfError) {
+            logger.warn(`Enhanced PDF generation failed, using fallback: ${pdfError}`);
+            // Keep the original PDF if enhanced generation fails
+          }
+        }
+
         // Update session
         await prisma.researchSession.update({
           where: { id: session.id },
@@ -275,17 +299,18 @@ router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest
         });
 
         // Save PDF file if generated
-        if (result.pdfPath) {
+        if (pdfPath) {
           await prisma.projectFile.create({
             data: {
               projectId: project.id,
               fileName: `${project.title}.pdf`,
-              filePath: result.pdfPath,
+              filePath: pdfPath,
               fileType: 'PDF',
               fileSize: 0, // Will be updated with actual size
               metadata: {
                 generatedAt: new Date(),
-                wordCount: result.metadata.wordCount
+                wordCount: result.metadata.wordCount,
+                generationMethod: pdfPath === result.pdfPath ? 'standard' : 'section-based'
               }
             }
           });
@@ -647,6 +672,140 @@ function isStandardSection(title: string): boolean {
   return standardSections.some(section => 
     title.toLowerCase().includes(section)
   );
+}
+
+// Enhanced PDF generation using LaTeX Formatter and Compilation Agents
+async function generatePDFFromSections(
+  projectId: string,
+  projectTitle: string,
+  sessionId: string,
+  websocket: WebSocketService
+): Promise<string> {
+  try {
+    logger.info(`Starting enhanced PDF generation for project ${projectId}`);
+
+    // Step 1: Fetch all sections for the project
+    const sections = await prisma.reportSection.findMany({
+      where: { projectId },
+      orderBy: { order: 'asc' }
+    });
+
+    if (sections.length === 0) {
+      throw new Error('No sections found for PDF generation');
+    }
+
+    logger.info(`Found ${sections.length} sections for PDF generation`);
+
+    // Step 2: Transform sections to the format expected by LaTeX Formatter Agent
+    const formattedSections = sections.map(section => ({
+      id: section.id,
+      title: section.title,
+      type: section.type as 'ABSTRACT' | 'INTRODUCTION' | 'CONCLUSION' | 'REFERENCES' | 'TEXT',
+      content: section.content,
+      order: section.order,
+      metadata: section.metadata
+    }));
+
+    // Step 3: Initialize LaTeX Formatter Agent
+    const latexFormatter = new LaTeXFormatterAgent(websocket);
+    latexFormatter.setSession(sessionId);
+
+    websocket.sendProgressUpdate(sessionId, {
+      sessionId,
+      progress: 91,
+      currentStep: 'Formatting sections into LaTeX',
+      message: 'Converting sections to academic LaTeX format'
+    });
+
+    // Step 4: Format sections into LaTeX
+    const latexResult = await latexFormatter.execute({
+      sections: formattedSections,
+      title: projectTitle,
+      author: 'Research Agent',
+      metadata: {
+        citationStyle: 'APA',
+        template: 'academic',
+        documentClass: 'article'
+      },
+      formatting: {
+        fontSize: 11,
+        margin: '1in',
+        lineSpacing: 1.5,
+        includeTableOfContents: sections.length > 5,
+        includeBibliography: false // Will be handled separately
+      }
+    });
+
+    logger.info(`LaTeX formatting completed with ${latexResult.warnings.length} warnings`);
+
+    // Step 5: Initialize Compilation Agent
+    const compilationAgent = new CompilationAgent(websocket);
+    compilationAgent.setSession(sessionId);
+
+    websocket.sendProgressUpdate(sessionId, {
+      sessionId,
+      progress: 95,
+      currentStep: 'Compiling LaTeX to PDF',
+      message: 'Running LaTeX compilation with error correction'
+    });
+
+    // Step 6: Compile LaTeX to PDF with automatic error fixing
+    const outputDir = path.join(process.cwd(), 'storage', 'projects', projectId, 'output');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const sanitizedFilename = projectTitle
+      .replace(/[^a-z0-9]/gi, '_')
+      .replace(/_+/g, '_')
+      .toLowerCase()
+      .substring(0, 50);
+
+    const compilationResult = await compilationAgent.execute({
+      latexDocument: latexResult.latexDocument,
+      filename: sanitizedFilename,
+      outputDir,
+      maxAttempts: 5,
+      enableAIFixes: true,
+      strictMode: false
+    });
+
+    if (!compilationResult.success) {
+      const errorMessages = compilationResult.finalErrors.map(e => e.message).join('; ');
+      throw new Error(`LaTeX compilation failed after ${compilationResult.totalAttempts} attempts: ${errorMessages}`);
+    }
+
+    logger.info(`PDF compilation successful after ${compilationResult.totalAttempts} attempts with quality score: ${compilationResult.metadata.qualityScore}`);
+
+    // Step 7: Return the path to the generated PDF
+    const finalPdfPath = path.join(outputDir, `${sanitizedFilename}.pdf`);
+    
+    // Verify PDF file exists
+    if (!fs.existsSync(finalPdfPath)) {
+      throw new Error(`PDF file not found at expected path: ${finalPdfPath}`);
+    }
+
+    websocket.sendProgressUpdate(sessionId, {
+      sessionId,
+      progress: 99,
+      currentStep: 'PDF generation completed',
+      message: `Successfully generated structured PDF with ${latexResult.metadata.totalSections} sections`
+    });
+
+    return finalPdfPath;
+
+  } catch (error) {
+    logger.error(`Enhanced PDF generation failed for project ${projectId}:`, error);
+    
+    websocket.sendProgressUpdate(sessionId, {
+      sessionId,
+      progress: 95,
+      currentStep: 'PDF generation failed',
+      message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+
+    throw error;
+  }
 }
 
 export default router;

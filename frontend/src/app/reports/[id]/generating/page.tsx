@@ -264,8 +264,8 @@ export default function GeneratingReportPage() {
                   { step: 'Researching relevant sources', threshold: 20 },
                   { step: 'Analyzing and extracting content', threshold: 40 },
                   { step: 'Writing report sections', threshold: 65 },
-                  { step: 'Compiling final document', threshold: 85 },
-                  { step: 'Generation complete', threshold: 100 }
+                  { step: 'Compiling LaTeX PDF document', threshold: 85 },
+                  { step: 'Report and PDF ready!', threshold: 100 }
                 ].map((item, index) => {
                   const currentProgress = getCurrentProgress();
                   const isActive = currentProgress >= item.threshold;

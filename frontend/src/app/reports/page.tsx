@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FileText, Calendar, Eye, Edit3, Download, Trash2, Archive, MoreVertical } from 'lucide-react';
+import { Plus, FileText, Calendar, Eye, Edit3, Download, Trash2, Archive, MoreVertical, FileType } from 'lucide-react';
 import { useReports } from '@/lib/hooks/use-reports';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -25,6 +25,54 @@ export default function ReportsPage() {
 
   const handlePreviewReport = (reportId: string) => {
     router.push(`/reports/${reportId}/preview`);
+  };
+
+  const handleDownloadPDF = async (reportId: string, reportTitle: string) => {
+    try {
+      // Try with proxy first, fallback to direct backend URL
+      let response;
+      try {
+        response = await fetch(`/api/projects/${reportId}/download`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          }
+        });
+      } catch (error) {
+        // Fallback to direct backend URL
+        response = await fetch(`http://localhost:4000/api/projects/${reportId}/download`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          }
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error('PDF not available');
+      }
+
+      // Create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${reportTitle}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "PDF downloaded",
+        description: `"${reportTitle}.pdf" has been downloaded.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Download failed",
+        description: "PDF not available yet. Try generating the report first.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDeleteReport = async (reportId: string, reportTitle: string) => {
@@ -127,6 +175,13 @@ export default function ReportsPage() {
                   }`}>
                     {report.status.toLowerCase()}
                   </span>
+                  {/* PDF Available Indicator */}
+                  {report.status === 'COMPLETED' && (
+                    <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                      <FileType className="w-3 h-3" />
+                      <span>PDF</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <Button
@@ -219,7 +274,7 @@ export default function ReportsPage() {
                       variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // Handle download
+                        handleDownloadPDF(report.id, report.title);
                       }}
                     >
                       <Download className="w-4 h-4" />
