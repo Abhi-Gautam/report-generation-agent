@@ -2,15 +2,18 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FileText, Calendar, Eye, Edit3, Download, Trash2 } from 'lucide-react';
+import { Plus, FileText, Calendar, Eye, Edit3, Download, Trash2, Archive, MoreVertical } from 'lucide-react';
 import { useReports } from '@/lib/hooks/use-reports';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useToast } from '@/lib/hooks/use-toast';
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { reports, isLoading, deleteReport } = useReports();
+  const { reports, isLoading, deleteReport, isDeleting } = useReports();
+  const { toast } = useToast();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
 
   const handleCreateNew = () => {
     router.push('/reports/new');
@@ -24,9 +27,27 @@ export default function ReportsPage() {
     router.push(`/reports/${reportId}/preview`);
   };
 
-  const handleDeleteReport = async (reportId: string) => {
-    if (confirm('Are you sure you want to delete this report?')) {
-      await deleteReport(reportId);
+  const handleDeleteReport = async (reportId: string, reportTitle: string) => {
+    const confirmMessage = `Are you sure you want to permanently delete "${reportTitle}"?\n\nThis action cannot be undone and will remove:\n- All report content and sections\n- Generated PDFs and files\n- Research data and citations`;
+    
+    if (confirm(confirmMessage)) {
+      setDeletingReportId(reportId);
+      try {
+        await deleteReport(reportId);
+        toast({
+          title: "Report deleted",
+          description: `"${reportTitle}" has been permanently deleted.`,
+        });
+        setSelectedReport(null);
+      } catch (error) {
+        toast({
+          title: "Delete failed",
+          description: "Failed to delete the report. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setDeletingReportId(null);
+      }
     }
   };
 
@@ -89,7 +110,7 @@ export default function ReportsPage() {
           {reports.map((report: any) => (
             <Card 
               key={report.id} 
-              className={`p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 ${
+              className={`group p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 ${
                 selectedReport === report.id ? 'border-blue-500' : 'border-transparent'
               }`}
               onClick={() => setSelectedReport(report.id === selectedReport ? null : report.id)}
@@ -129,6 +150,22 @@ export default function ReportsPage() {
                     className="opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <Edit3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteReport(report.id, report.title);
+                    }}
+                    disabled={deletingReportId === report.id}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    {deletingReportId === report.id ? (
+                      <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </Button>
                 </div>
               </div>
@@ -192,11 +229,16 @@ export default function ReportsPage() {
                       variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteReport(report.id);
+                        handleDeleteReport(report.id, report.title);
                       }}
-                      className="text-red-600 hover:text-red-700"
+                      disabled={deletingReportId === report.id}
+                      className="text-red-600 hover:text-red-700 disabled:opacity-50"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {deletingReportId === report.id ? (
+                        <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
