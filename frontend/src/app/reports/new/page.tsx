@@ -22,7 +22,8 @@ export default function NewReportPage() {
     setIsCreating(true);
     try {
       const report = await createReport(reportData);
-      router.push(`/reports/${report.id}/edit`);
+      // Redirect to generation progress page instead of edit page
+      router.push(`/reports/${report.id}/generating`);
     } catch (error) {
       console.error('Failed to create report:', error);
     } finally {

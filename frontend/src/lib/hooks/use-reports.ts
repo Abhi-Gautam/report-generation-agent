@@ -11,6 +11,7 @@ interface Report {
   updatedAt: string;
   sections?: Section[];
   metadata?: any;
+  sessionId?: string;
 }
 
 interface Section {
@@ -77,16 +78,19 @@ export function useReports(reportId?: string) {
 
       const project = projectResponse.data.data;
 
-      // Then generate the structure
-      const structureResponse = await authApi.post(`/sections/${project.id}/generate-structure`, {
-        reportType: reportData.reportType,
-        academicLevel: reportData.academicLevel,
-        fieldOfStudy: reportData.fieldOfStudy,
-        wordLimit: reportData.wordLimit,
-        customSections: reportData.customSections
+      // Start AI research generation immediately
+      const generationResponse = await authApi.post(`/projects/${project.id}/generate`, {
+        options: {
+          includeImages: false,
+          maxSources: 5,
+          citationStyle: 'APA'
+        }
       });
 
-      return project;
+      return {
+        ...project,
+        sessionId: generationResponse.data.data.sessionId
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });

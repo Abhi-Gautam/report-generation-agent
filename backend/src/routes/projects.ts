@@ -257,6 +257,11 @@ router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest
           }
         });
 
+        // Parse AI-generated content into individual sections
+        logger.info(`About to parse content into sections for project ${project.id}`);
+        await createReportSectionsFromContent(project.id, result.content, result.outline);
+        logger.info(`Finished parsing content into sections for project ${project.id}`);
+
         // Update session
         await prisma.researchSession.update({
           where: { id: session.id },
@@ -541,5 +546,107 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res):
     return;
   }
 });
+
+// Helper function to parse AI-generated content and create individual report sections
+async function createReportSectionsFromContent(
+  projectId: string, 
+  content: string, 
+  outline: any
+): Promise<void> {
+  try {
+    logger.info(`Creating sections for project ${projectId}, content length: ${content.length}, outline sections: ${outline.sections?.length || 0}`);
+    // Parse the markdown content by section headers
+    const sections = parseContentIntoSections(content, outline.sections);
+    logger.info(`Parsed ${sections.length} sections from content`);
+    
+    // Create report sections in database
+    if (sections.length > 0) {
+      await prisma.reportSection.createMany({
+        data: sections.map((section, index) => ({
+          projectId,
+          order: index + 1,
+          title: section.title,
+          type: mapSectionTypeFromTitle(section.title),
+          content: section.content,
+          metadata: {
+            generatedByAI: true,
+            wordCount: section.content.split(/\s+/).length,
+            createdAt: new Date().toISOString()
+          }
+        }))
+      });
+      
+      logger.info(`Created ${sections.length} report sections for project ${projectId}`);
+    }
+  } catch (error) {
+    logger.error('Failed to create report sections from content:', error);
+    // Don't throw - this shouldn't fail the entire generation
+  }
+}
+
+// Parse markdown content into individual sections
+function parseContentIntoSections(content: string, outlineSections: any[]): Array<{title: string, content: string}> {
+  const sections: Array<{title: string, content: string}> = [];
+  
+  // Split content by section headers (## Section Title)
+  const sectionParts = content.split(/^## /m).filter(part => part.trim());
+  
+  // Map outline sections to ensure we have the correct titles
+  const outlineTitles = outlineSections.map(section => section.title);
+  
+  sectionParts.forEach(part => {
+    const lines = part.trim().split('\n');
+    if (lines.length === 0) return;
+    
+    const title = lines[0].trim();
+    const sectionContent = lines.slice(1).join('\n').trim();
+    
+    // Only include sections that match our outline or are standard sections
+    if (outlineTitles.includes(title) || isStandardSection(title)) {
+      sections.push({
+        title,
+        content: sectionContent
+      });
+    }
+  });
+  
+  // If no sections found, try to create basic sections from outline
+  if (sections.length === 0 && outlineSections.length > 0) {
+    // Create basic sections with placeholder content
+    outlineSections.forEach(section => {
+      sections.push({
+        title: section.title,
+        content: `### ${section.title}\n\nContent for ${section.title} section. This section covers the key aspects and analysis related to the research topic.\n\n${section.keyPoints ? section.keyPoints.map((point: string) => `- ${point}`).join('\n') : ''}`
+      });
+    });
+  }
+  
+  return sections;
+}
+
+// Map section titles to report section types
+function mapSectionTypeFromTitle(title: string): 'ABSTRACT' | 'INTRODUCTION' | 'CONCLUSION' | 'REFERENCES' | 'TEXT' {
+  const lowerTitle = title.toLowerCase();
+  
+  if (lowerTitle.includes('abstract')) return 'ABSTRACT';
+  if (lowerTitle.includes('introduction')) return 'INTRODUCTION';
+  if (lowerTitle.includes('conclusion')) return 'CONCLUSION';
+  if (lowerTitle.includes('reference') || lowerTitle.includes('bibliograph') || lowerTitle.includes('citation')) return 'REFERENCES';
+  
+  return 'TEXT'; // Default type
+}
+
+// Check if title represents a standard academic section
+function isStandardSection(title: string): boolean {
+  const standardSections = [
+    'abstract', 'introduction', 'literature review', 'methodology', 'methods',
+    'results', 'findings', 'discussion', 'analysis', 'conclusion', 'references',
+    'bibliography', 'appendix'
+  ];
+  
+  return standardSections.some(section => 
+    title.toLowerCase().includes(section)
+  );
+}
 
 export default router;

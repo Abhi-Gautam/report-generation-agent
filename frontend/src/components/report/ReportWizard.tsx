@@ -361,7 +361,7 @@ export function ReportWizard({ onSubmit, isLoading, onCancel }: ReportWizardProp
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={!canProceed() || isLoading}>
-              {isLoading ? 'Creating...' : 'Create Report'}
+              {isLoading ? 'Generating AI Report...' : 'Generate AI Report'}
             </Button>
           )}
         </div>
