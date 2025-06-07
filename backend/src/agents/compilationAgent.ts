@@ -1,7 +1,6 @@
 import { BaseAgent, AgentConfig, AgentMemoryManager } from './base';
 import { AgentType } from '../shared';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { LoggerService } from '../services/logger';
 import { latexCompiler } from '../services/latexCompiler';
 
 export interface CompilationAttempt {
@@ -10,7 +9,7 @@ export interface CompilationAttempt {
   success: boolean;
   errors: LaTeXError[];
   warnings: string[];
-  output?: Buffer;
+  output?: Buffer | undefined;
   log: string;
   fixesApplied: string[];
   processingTime: number;
@@ -18,12 +17,12 @@ export interface CompilationAttempt {
 
 export interface LaTeXError {
   type: 'ERROR' | 'WARNING' | 'INFO';
-  line?: number;
+  line?: number | undefined;
   message: string;
-  context?: string;
+  context?: string | undefined;
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   fixable: boolean;
-  suggestedFix?: string;
+  suggestedFix?: string | undefined;
 }
 
 export interface CompilationAgentInput {
@@ -38,7 +37,7 @@ export interface CompilationAgentInput {
 export interface CompilationAgentOutput {
   success: boolean;
   finalDocument: string;
-  pdfPath?: string;
+  pdfPath?: string | undefined;
   attempts: CompilationAttempt[];
   totalAttempts: number;
   finalErrors: LaTeXError[];
@@ -53,7 +52,6 @@ export interface CompilationAgentOutput {
 export class CompilationAgent extends BaseAgent {
   private genAI: GoogleGenerativeAI;
   private memory: AgentMemoryManager;
-  private logger: LoggerService;
 
   constructor(websocket?: any) {
     const config: AgentConfig = {
@@ -69,7 +67,6 @@ export class CompilationAgent extends BaseAgent {
     
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     this.memory = new AgentMemoryManager();
-    this.logger = new LoggerService();
   }
 
   public getName(): string {
@@ -222,9 +219,12 @@ export class CompilationAgent extends BaseAgent {
         success: false,
         errors: [{
           type: 'ERROR',
+          line: undefined,
           message: errorMessage,
+          context: undefined,
           severity: 'CRITICAL',
-          fixable: false
+          fixable: false,
+          suggestedFix: undefined
         }],
         warnings: [],
         log: errorMessage,
@@ -255,7 +255,8 @@ export class CompilationAgent extends BaseAgent {
             message: errorMatch[1],
             context: lines[i + 1] || undefined,
             severity: this.classifyErrorSeverity(errorMatch[1]),
-            fixable: this.isErrorFixable(errorMatch[1])
+            fixable: this.isErrorFixable(errorMatch[1]),
+            suggestedFix: undefined
           });
         }
       } else if (line.includes('LaTeX Warning:')) {
@@ -264,9 +265,12 @@ export class CompilationAgent extends BaseAgent {
         if (warningMatch) {
           errors.push({
             type: 'WARNING',
+            line: undefined,
             message: warningMatch[1],
+            context: undefined,
             severity: 'LOW',
-            fixable: true
+            fixable: true,
+            suggestedFix: undefined
           });
         }
       } else if (line.includes('Package') && line.includes('Error:')) {
@@ -275,9 +279,12 @@ export class CompilationAgent extends BaseAgent {
         if (packageErrorMatch) {
           errors.push({
             type: 'ERROR',
+            line: undefined,
             message: `Package ${packageErrorMatch[1]}: ${packageErrorMatch[2]}`,
+            context: undefined,
             severity: 'HIGH',
-            fixable: this.isPackageErrorFixable(packageErrorMatch[1])
+            fixable: this.isPackageErrorFixable(packageErrorMatch[1]),
+            suggestedFix: undefined
           });
         }
       }
@@ -529,7 +536,7 @@ Return the complete corrected document.
   }
 
   private async finalizeResults(
-    input: CompilationAgentInput,
+    _input: CompilationAgentInput,
     attempts: CompilationAttempt[],
     finalDocument: string,
     success: boolean,

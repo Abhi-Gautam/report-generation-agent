@@ -1,7 +1,6 @@
 import { BaseAgent, AgentConfig, AgentMemoryManager } from './base';
 import { AgentType } from '../shared';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { LoggerService } from '../services/logger';
 
 export interface ReportSection {
   id: string;
@@ -57,7 +56,6 @@ export interface LaTeXFormatterOutput {
 export class LaTeXFormatterAgent extends BaseAgent {
   private genAI: GoogleGenerativeAI;
   private memory: AgentMemoryManager;
-  private logger: LoggerService;
 
   constructor(websocket?: any) {
     const config: AgentConfig = {
@@ -73,7 +71,6 @@ export class LaTeXFormatterAgent extends BaseAgent {
     
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     this.memory = new AgentMemoryManager();
-    this.logger = new LoggerService();
   }
 
   public getName(): string {
@@ -122,23 +119,37 @@ export class LaTeXFormatterAgent extends BaseAgent {
       this.updateProgress(90, 'Generated bibliography');
 
       // Step 8: Assemble final document
-      const result = await this.assembleDocument({
+      const documentParts: {
+        preamble: string;
+        titlePage: string;
+        tableOfContents?: string;
+        abstract?: string;
+        mainContent: string;
+        bibliography?: string;
+      } = {
         preamble,
         titlePage,
-        tableOfContents,
-        abstract: abstractSection,
-        mainContent,
-        bibliography
-      }, input);
+        mainContent
+      };
+
+      if (tableOfContents) {
+        documentParts.tableOfContents = tableOfContents;
+      }
+      if (abstractSection) {
+        documentParts.abstract = abstractSection;
+      }
+      if (bibliography) {
+        documentParts.bibliography = bibliography;
+      }
+
+      const result = await this.assembleDocument(documentParts, input);
       this.updateProgress(100, 'LaTeX document formatting completed');
 
-      const processingTime = Date.now() - startTime;
-      this.logger.info(`LaTeX formatting completed in ${processingTime}ms`);
+      this.logger.info(`LaTeX formatting completed in ${Date.now() - startTime}ms`);
 
       return result;
 
     } catch (error) {
-      const processingTime = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       this.logger.error('LaTeX formatting failed:', error);
@@ -301,7 +312,7 @@ export class LaTeXFormatterAgent extends BaseAgent {
 
     return `% Abstract
 \\begin{abstract}
-${this.formatSectionContent(abstractSection.content)}
+${abstractSection.content}
 \\end{abstract}
 \\newpage
 
@@ -371,7 +382,7 @@ ${this.formatSectionContent(abstractSection.content)}
     );
   }
 
-  private async enhanceContentWithAI(content: string, metadata?: any): Promise<string> {
+  private async enhanceContentWithAI(content: string, _metadata?: any): Promise<string> {
     try {
       const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       
@@ -438,7 +449,7 @@ Return only the LaTeX-formatted content, no explanations.
     });
 
     // Code blocks
-    latex = latex.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+    latex = latex.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
       return `\\begin{lstlisting}${lang ? `[language=${lang}]` : ''}\n${code}\n\\end{lstlisting}`;
     });
     latex = latex.replace(/`([^`]+)`/g, '\\texttt{$1}');
@@ -467,10 +478,10 @@ Return only the LaTeX-formatted content, no explanations.
 
     // Basic table detection and formatting
     const tableRegex = /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g;
-    formatted = formatted.replace(tableRegex, (match, header, rows) => {
-      const headerCells = header.split('|').map(cell => cell.trim()).filter(cell => cell);
-      const rowsArray = rows.trim().split('\n').map(row => 
-        row.split('|').map(cell => cell.trim()).filter(cell => cell)
+    formatted = formatted.replace(tableRegex, (_match, header, rows) => {
+      const headerCells = header.split('|').map((cell: string) => cell.trim()).filter((cell: string) => cell);
+      const rowsArray = rows.trim().split('\n').map((row: string) => 
+        row.split('|').map((cell: string) => cell.trim()).filter((cell: string) => cell)
       );
 
       let table = '\\begin{table}[H]\n\\centering\n';
@@ -479,7 +490,7 @@ Return only the LaTeX-formatted content, no explanations.
       table += headerCells.join(' & ') + ' \\\\\n';
       table += '\\midrule\n';
       
-      rowsArray.forEach(row => {
+      rowsArray.forEach((row: string[]) => {
         if (row.length > 0) {
           table += row.join(' & ') + ' \\\\\n';
         }
@@ -494,7 +505,7 @@ Return only the LaTeX-formatted content, no explanations.
     });
 
     // Basic figure handling
-    formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+    formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
       return `\\begin{figure}[H]
 \\centering
 \\includegraphics[width=0.8\\textwidth]{${src}}
