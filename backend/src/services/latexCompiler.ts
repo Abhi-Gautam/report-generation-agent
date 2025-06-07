@@ -105,9 +105,9 @@ export class LaTeXCompiler {
         await fs.writeFile(texFile, content);
         
         try {
-          // First pass with pdflatex
+          // First pass with pdflatex - use absolute paths to avoid cd issues
           const { stdout } = await execAsync(
-            `cd "${targetDir}" && pdflatex -interaction=nonstopmode -halt-on-error "${filename}.tex"`,
+            `pdflatex -interaction=nonstopmode -halt-on-error -output-directory="${targetDir}" "${texFile}"`,
             { timeout: 30000 }
           );
           

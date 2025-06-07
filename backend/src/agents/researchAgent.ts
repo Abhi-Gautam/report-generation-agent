@@ -86,16 +86,12 @@ export class ResearchAgent extends BaseAgent {
       const content = await this.generateContent(outline, researchData);
       this.updateProgress(85, 'Generated paper content');
 
-      // Step 5: Generate PDF (optional)
-      let pdfPath: string | undefined;
-      if (input.preferences?.includeImages !== false) {
-        pdfPath = await this.generatePDF(content, outline);
-        this.updateProgress(95, 'Generated PDF document');
-      }
+      // Step 5: Skip PDF generation (handled by dedicated agents later)
+      this.updateProgress(85, 'Content generation completed');
 
-      // Step 6: Finalize and return results
-      const result = await this.finalizeResults(outline, content, researchData, pdfPath);
-      this.updateProgress(100, 'Research completed successfully');
+      // Step 6: Finalize and return results (no PDF from ResearchAgent)
+      const result = await this.finalizeResults(outline, content, researchData, undefined);
+      this.updateProgress(85, 'Research completed successfully');
 
       const processingTime = Date.now() - startTime;
       await this.logAction(
@@ -254,25 +250,6 @@ export class ResearchAgent extends BaseAgent {
     return result.data as string;
   }
 
-  private async generatePDF(content: string, outline: ResearchOutline): Promise<string> {
-    // const pdfTool = this.config.tools.find(t => t.name === 'PDFGenerator') as PDFGeneratorTool; // Unused
-    
-    const result = await this.executeTool('PDFGenerator', {
-      content,
-      title: outline.title,
-      metadata: {
-        author: 'Research Agent',
-        subject: outline.title,
-        keywords: outline.keywords
-      }
-    });
-
-    if (!result.success) {
-      throw new Error(`Failed to generate PDF: ${result.error}`);
-    }
-
-    return result.data as string;
-  }
 
   private async finalizeResults(
     outline: ResearchOutline,

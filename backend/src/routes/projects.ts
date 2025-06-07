@@ -266,23 +266,23 @@ router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest
         await createReportSectionsFromContent(project.id, result.content, result.outline);
         logger.info(`Finished parsing content into sections for project ${project.id}`);
 
-        // Generate PDF from individual sections using new agents
-        let pdfPath: string | undefined = result.pdfPath;
+        // Generate PDF using new agent system ONLY
+        let pdfPath: string | undefined = undefined;
         if (preferencesForAgent.includeImages) {
-          logger.info(`Starting enhanced PDF generation from sections for project ${project.id}`);
+          logger.info(`Starting PDF generation from sections for project ${project.id}`);
           websocketInstance.sendProgressUpdate(session.id, {
             sessionId: session.id,
             progress: 90,
-            currentStep: 'Generating PDF from sections',
-            message: 'Creating structured LaTeX document'
+            currentStep: 'Generating PDF document',
+            message: 'Creating structured LaTeX document with academic formatting'
           });
 
           try {
             pdfPath = await generatePDFFromSections(project.id, project.title, session.id, websocketInstance);
-            logger.info(`Enhanced PDF generation completed: ${pdfPath}`);
+            logger.info(`PDF generation completed: ${pdfPath}`);
           } catch (pdfError) {
-            logger.warn(`Enhanced PDF generation failed, using fallback: ${pdfError}`);
-            // Keep the original PDF if enhanced generation fails
+            logger.error(`PDF generation failed: ${pdfError}`);
+            // Don't save any PDF file record if generation fails
           }
         }
 
@@ -759,7 +759,7 @@ async function generatePDFFromSections(
       .replace(/[^a-z0-9]/gi, '_')
       .replace(/_+/g, '_')
       .toLowerCase()
-      .substring(0, 50);
+      .substring(0, 20); // Shorter filename to avoid path issues
 
     const compilationResult = await compilationAgent.execute({
       latexDocument: latexResult.latexDocument,
