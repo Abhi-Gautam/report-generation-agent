@@ -191,63 +191,39 @@ export class LaTeXFormatterAgent extends BaseAgent {
 
     let preamble = `\\documentclass[${fontSize}pt,a4paper]{${documentClass}}\n\n`;
     
-    // Essential packages
+    // Essential packages (minimal set for compatibility)
     preamble += `% Essential packages
 \\usepackage[utf8]{inputenc}
 \\usepackage[T1]{fontenc}
 \\usepackage[english]{babel}
 \\usepackage{amsmath,amssymb,amsfonts}
 \\usepackage{graphicx}
-\\usepackage{xcolor}
-\\usepackage{hyperref}
 \\usepackage{geometry}
-\\usepackage{setspace}
-\\usepackage{parskip}
-\\usepackage{titlesec}
-\\usepackage{fancyhdr}
-\\usepackage{booktabs}
-\\usepackage{array}
-\\usepackage{longtable}
 \\usepackage{url}
-\\usepackage{listings}
-\\usepackage{tikz}
-\\usepackage{float}
 
 `;
 
-    // Template-specific packages
+    // Template-specific packages (minimal for compatibility)
     switch (template) {
       case 'academic':
-        preamble += `% Academic template packages
-\\usepackage{natbib}
-\\usepackage{abstract}
-\\usepackage{authblk}
+        preamble += `% Academic template (basic)
 \\renewcommand{\\abstractname}{Abstract}
-\\setlength{\\absleftindent}{0mm}
-\\setlength{\\absrightindent}{0mm}
 
 `;
         break;
       case 'professional':
-        preamble += `% Professional template packages
-\\usepackage{fancyhdr}
-\\pagestyle{fancy}
-\\fancyhf{}
-\\fancyhead[L]{\\leftmark}
-\\fancyhead[R]{\\thepage}
-\\renewcommand{\\headrulewidth}{0.4pt}
+        preamble += `% Professional template (basic)
+% Headers handled by basic LaTeX
 
 `;
         break;
     }
 
-    // Citation style
-    if (input.metadata?.citationStyle) {
-      preamble += `% Citation style
-\\bibliographystyle{${this.getCitationStyle(input.metadata.citationStyle)}}
+    // Basic citation style
+    preamble += `% Basic citations
+\\bibliographystyle{plain}
 
 `;
-    }
 
     // Geometry and formatting
     preamble += `% Page geometry and formatting
@@ -264,19 +240,10 @@ export class LaTeXFormatterAgent extends BaseAgent {
 `;
     }
 
-    // Hyperref configuration (should be last)
-    preamble += `% Hyperref configuration
-\\hypersetup{
-  colorlinks=true,
-  linkcolor=blue,
-  filecolor=magenta,
-  urlcolor=cyan,
-  citecolor=green,
-  pdftitle={${this.escapeLatex(input.title)}},
-  pdfauthor={${this.escapeLatex(input.author || 'Research Agent')}},
-  pdfsubject={Research Document},
-  pdfkeywords={${input.metadata?.keywords?.join(', ') || ''}}
-}
+    // Basic document setup
+    preamble += `% Document formatting
+\\setlength{\\parindent}{0pt}
+\\setlength{\\parskip}{1em}
 
 `;
 
@@ -484,11 +451,11 @@ Return only the LaTeX-formatted content, no explanations.
         row.split('|').map((cell: string) => cell.trim()).filter((cell: string) => cell)
       );
 
-      let table = '\\begin{table}[H]\n\\centering\n';
-      table += `\\begin{tabular}{${'c'.repeat(headerCells.length)}}\n`;
-      table += '\\toprule\n';
+      let table = '\\begin{center}\n';
+      table += `\\begin{tabular}{${'|c'.repeat(headerCells.length)}|}\n`;
+      table += '\\hline\n';
       table += headerCells.join(' & ') + ' \\\\\n';
-      table += '\\midrule\n';
+      table += '\\hline\n';
       
       rowsArray.forEach((row: string[]) => {
         if (row.length > 0) {
@@ -496,21 +463,19 @@ Return only the LaTeX-formatted content, no explanations.
         }
       });
       
-      table += '\\bottomrule\n';
+      table += '\\hline\n';
       table += '\\end{tabular}\n';
-      table += '\\caption{Table caption}\n';
-      table += '\\end{table}\n\n';
+      table += '\\end{center}\n\n';
 
       return table;
     });
 
-    // Basic figure handling
-    formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
-      return `\\begin{figure}[H]
-\\centering
-\\includegraphics[width=0.8\\textwidth]{${src}}
-\\caption{${alt || 'Figure caption'}}
-\\end{figure}
+    // Basic figure handling (simplified)
+    formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, _src) => {
+      return `
+\\begin{center}
+\\textbf{Figure:} ${alt || 'Image'}
+\\end{center}
 
 `;
     });

@@ -2,7 +2,7 @@ FROM node:24-alpine
 
 WORKDIR /app/backend
 
-# Install system dependencies including minimal LaTeX
+# Install system dependencies including comprehensive LaTeX
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -13,6 +13,10 @@ RUN apk add --no-cache \
     texlive \
     texlive-luatex \
     texlive-xetex \
+    texlive-latex-extra \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
     py3-pygments \
     zip \
     unzip \
