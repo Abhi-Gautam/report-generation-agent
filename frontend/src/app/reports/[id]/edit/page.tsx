@@ -70,10 +70,10 @@ export default function EditReportPage() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white sticky top-0 z-10">
+      <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur-sm sticky top-0 z-10 border-border">
         <div>
           <h1 className="text-xl font-semibold">{report?.title}</h1>
-          <p className="text-sm text-gray-600">{report?.topic}</p>
+          <p className="text-sm text-muted-foreground">{report?.topic}</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export default function EditReportPage() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Sidebar - Section Navigator */}
-        <div className="w-80 border-r bg-gray-50 overflow-y-auto">
+        <div className="w-80 border-r bg-muted/50 overflow-y-auto border-border">
           <SectionNavigator
             sections={sections}
             selectedSectionId={selectedSectionId}

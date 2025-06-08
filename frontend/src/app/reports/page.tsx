@@ -318,10 +318,10 @@ export default function ReportsPage() {
 
       {/* Quick Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4 border border-border">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Create New Report</h2>
+              <h2 className="text-xl font-semibold text-foreground">Create New Report</h2>
               <Button
                 variant="ghost"
                 size="icon"
@@ -333,7 +333,7 @@ export default function ReportsPage() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Report Title *
                 </label>
                 <input
@@ -341,12 +341,12 @@ export default function ReportsPage() {
                   value={quickForm.title}
                   onChange={(e) => setQuickForm(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="Enter your report title"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Research Topic *
                 </label>
                 <textarea
@@ -354,11 +354,11 @@ export default function ReportsPage() {
                   onChange={(e) => setQuickForm(prev => ({ ...prev, topic: e.target.value }))}
                   placeholder="Describe what your report will cover"
                   rows={3}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
                 />
               </div>
               
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 <p>Default settings will be used:</p>
                 <ul className="list-disc list-inside mt-1 space-y-1">
                   <li>Research Paper format</li>
@@ -389,10 +389,10 @@ export default function ReportsPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && reportToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4 border border-border">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-red-600">Delete Report</h2>
+              <h2 className="text-xl font-semibold text-destructive">Delete Report</h2>
               <Button
                 variant="ghost"
                 size="icon"
@@ -403,13 +403,13 @@ export default function ReportsPage() {
             </div>
             
             <div className="space-y-4">
-              <p className="text-gray-700">
+              <p className="text-foreground">
                 Are you sure you want to permanently delete <strong>"{reportToDelete.title}"</strong>?
               </p>
               
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-800 text-sm font-medium mb-2">This action cannot be undone and will remove:</p>
-                <ul className="text-red-700 text-sm space-y-1">
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                <p className="text-destructive text-sm font-medium mb-2">This action cannot be undone and will remove:</p>
+                <ul className="text-destructive/80 text-sm space-y-1">
                   <li>• All report content and sections</li>
                   <li>• Generated PDFs and files</li>
                   <li>• Research data and citations</li>

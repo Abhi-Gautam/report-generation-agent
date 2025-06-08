@@ -86,7 +86,7 @@ E = mc^2
 
   if (!section) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
         <p>Select a section to start editing</p>
       </div>
     );
@@ -97,10 +97,10 @@ E = mc^2
       {/* Main Editor */}
       <div className="flex-1 flex flex-col">
         {/* Editor Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-white">
+        <div className="flex items-center justify-between p-4 border-b bg-background border-border">
           <div>
             <h3 className="font-semibold text-lg">{section.title}</h3>
-            <p className="text-sm text-gray-600 capitalize">{section.type.toLowerCase()} Section</p>
+            <p className="text-sm text-muted-foreground capitalize">{section.type.toLowerCase()} Section</p>
           </div>
           
           <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ E = mc^2
 
       {/* Suggestions Sidebar */}
       {showSuggestions && (
-        <div className="w-80 border-l bg-gray-50">
+        <div className="w-80 border-l bg-muted/50 border-border">
           <SimilarContentSuggestions
             reportId={section.id.split('_')[0]} // Extract reportId
             sectionId={section.id}
