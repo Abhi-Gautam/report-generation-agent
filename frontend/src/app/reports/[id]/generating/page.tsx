@@ -26,7 +26,6 @@ export default function GeneratingReportPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [initialStatus, setInitialStatus] = useState<GenerationStatus | null>(null);
-  const [sectionsCount, setSectionsCount] = useState<number>(0);
 
   // Use WebSocket for real-time progress tracking
   const { progress, error: wsError, isComplete, isConnected } = useProgressTracking(sessionId || undefined);
@@ -64,90 +63,24 @@ export default function GeneratingReportPage() {
     }
   };
 
-  // Check sections count periodically
-  const checkSectionsCount = async () => {
-    try {
-      let sectionsResponse;
-      try {
-        sectionsResponse = await authApi.get(`/sections/${projectId}`);
-      } catch (error) {
-        // Fallback to direct backend URL
-        const token = localStorage.getItem('auth_token');
-        const backendResponse = await fetch(`http://localhost:4000/api/sections/${projectId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (backendResponse.ok) {
-          sectionsResponse = { data: await backendResponse.json() };
-        }
-      }
-      
-      if (sectionsResponse?.data?.data) {
-        setSectionsCount(sectionsResponse.data.data.length);
-      }
-    } catch (err) {
-      console.error('Failed to check sections count:', err);
-    }
-  };
 
   useEffect(() => {
     if (!projectId) return;
     fetchInitialStatus();
-    
-    // Start checking sections count every 3 seconds
-    const sectionsInterval = setInterval(checkSectionsCount, 3000);
-    
-    return () => clearInterval(sectionsInterval);
   }, [projectId]);
 
-  // Check if sections are available before redirecting
-  const checkSectionsAndRedirect = async () => {
-    try {
-      let sectionsResponse;
-      try {
-        sectionsResponse = await authApi.get(`/sections/${projectId}`);
-      } catch (error) {
-        // Fallback to direct backend URL
-        const token = localStorage.getItem('auth_token');
-        const backendResponse = await fetch(`http://localhost:4000/api/sections/${projectId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (backendResponse.ok) {
-          sectionsResponse = { data: await backendResponse.json() };
-        }
-      }
-      
-      // Only redirect if we have sections available
-      if (sectionsResponse?.data?.data?.length > 0) {
-        console.log(`Found ${sectionsResponse.data.data.length} sections, redirecting to edit page`);
-        setTimeout(() => {
-          router.push(`/reports/${projectId}/edit`);
-        }, 2000);
-      } else {
-        // If no sections yet, check again in 2 seconds
-        setTimeout(checkSectionsAndRedirect, 2000);
-      }
-    } catch (err) {
-      console.error('Failed to check sections:', err);
-      // Fallback: redirect anyway after delay
-      setTimeout(() => {
-        router.push(`/reports/${projectId}/edit`);
-      }, 3000);
-    }
+  // Simple redirect after completion
+  const redirectToEdit = () => {
+    console.log('Generation completed, redirecting to edit page');
+    setTimeout(() => {
+      router.push(`/reports/${projectId}/edit`);
+    }, 2000);
   };
 
   // Handle completion and redirect
   useEffect(() => {
     if (isComplete || (initialStatus?.projectStatus === 'COMPLETED' && initialStatus?.sessionStatus === 'COMPLETED')) {
-      console.log('Generation completed, checking sections before redirect...');
-      checkSectionsAndRedirect();
+      redirectToEdit();
     }
   }, [isComplete, initialStatus, router, projectId]);
 
@@ -210,30 +143,7 @@ export default function GeneratingReportPage() {
             )}
           </div>
 
-          {/* Debug Info */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-2 text-xs text-gray-500 space-y-1">
-              <div>Project: {projectId}</div>
-              <div>Session: {sessionId}</div>
-              <div>Status: {initialStatus?.projectStatus} / {initialStatus?.sessionStatus}</div>
-              <div>WS Progress: {progress?.progress}%</div>
-              <div>Sections: {sectionsCount}</div>
-            </div>
-          )}
           
-          {/* Sections Count Display */}
-          <div className="mt-4 flex items-center justify-center space-x-4 text-sm text-gray-600">
-            <div className="flex items-center space-x-2">
-              <span>📄</span>
-              <span>{sectionsCount} sections created</span>
-            </div>
-            {sessionId && (
-              <div className="flex items-center space-x-2">
-                <span>🔗</span>
-                <span>Session: {sessionId.slice(-8)}</span>
-              </div>
-            )}
-          </div>
         </div>
 
         <Card className="p-8">
@@ -264,13 +174,14 @@ export default function GeneratingReportPage() {
                   { step: 'Researching relevant sources', threshold: 20 },
                   { step: 'Analyzing and extracting content', threshold: 40 },
                   { step: 'Writing report sections', threshold: 65 },
-                  { step: 'Compiling LaTeX PDF document', threshold: 85 },
+                  { step: 'Formatting LaTeX document', threshold: 85 },
+                  { step: 'Compiling PDF with error correction', threshold: 90 },
                   { step: 'Report and PDF ready!', threshold: 100 }
                 ].map((item, index) => {
                   const currentProgress = getCurrentProgress();
                   const isActive = currentProgress >= item.threshold;
                   const isCurrent = currentProgress >= item.threshold && 
-                                   (index === 5 || currentProgress < ([20, 40, 65, 85, 100][index] || 100));
+                                   (index === 6 || currentProgress < ([20, 40, 65, 85, 90, 100][index] || 100));
                   
                   return (
                     <div key={index} className={`flex items-center space-x-3 p-2 rounded ${
@@ -284,10 +195,10 @@ export default function GeneratingReportPage() {
                       }`}>
                         {item.step}
                       </span>
-                      {isActive && index < 5 && (
+                      {isActive && index < 6 && (
                         <CheckCircle className="w-4 h-4 text-green-500 ml-auto" />
                       )}
-                      {isCurrent && index < 5 && (
+                      {isCurrent && index < 6 && (
                         <Loader2 className="w-4 h-4 text-blue-500 animate-spin ml-auto" />
                       )}
                     </div>

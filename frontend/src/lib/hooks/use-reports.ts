@@ -78,6 +78,9 @@ export function useReports(reportId?: string) {
 
       const project = projectResponse.data.data;
 
+      // Small delay to ensure project is fully created
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Start AI research generation immediately with PDF compilation
       const generationResponse = await authApi.post(`/projects/${project.id}/generate`, {
         options: {
