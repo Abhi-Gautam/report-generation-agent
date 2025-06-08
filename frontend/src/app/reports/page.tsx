@@ -10,13 +10,12 @@ import { useToast } from '@/lib/hooks/use-toast';
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { reports, isLoading, deleteReport, isDeleting } = useReports();
+  const { reports, isLoading, deleteReport, isDeleting, createReport, isCreating: isCreatingReport } = useReports();
   const { toast } = useToast();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [quickForm, setQuickForm] = useState({ title: '', topic: '' });
-  const [isCreating, setIsCreating] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<{id: string, title: string} | null>(null);
 
@@ -34,39 +33,25 @@ export default function ReportsPage() {
       return;
     }
 
-    setIsCreating(true);
     try {
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({
-          title: quickForm.title,
-          topic: quickForm.topic,
-          reportType: 'research_paper',
-          academicLevel: 'undergraduate',
-          wordLimit: 5000
-        })
+      const report = await createReport({
+        title: quickForm.title,
+        topic: quickForm.topic,
+        reportType: 'research_paper',
+        academicLevel: 'undergraduate',
+        wordLimit: 5000
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to create report');
-      }
-
-      const data = await response.json();
-      router.push(`/research/${data.projectId}/generate`);
+      
+      // Redirect to generation progress page
+      router.push(`/reports/${report.id}/generating`);
+      setShowCreateModal(false);
+      setQuickForm({ title: '', topic: '' });
     } catch (error) {
       toast({
         title: "Creation failed",
         description: "Failed to create report. Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setIsCreating(false);
-      setShowCreateModal(false);
-      setQuickForm({ title: '', topic: '' });
     }
   };
 
@@ -372,15 +357,15 @@ export default function ReportsPage() {
               <Button
                 variant="outline"
                 onClick={() => setShowCreateModal(false)}
-                disabled={isCreating}
+                disabled={isCreatingReport}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleQuickCreate}
-                disabled={isCreating || !quickForm.title.trim() || !quickForm.topic.trim()}
+                disabled={isCreatingReport || !quickForm.title.trim() || !quickForm.topic.trim()}
               >
-                {isCreating ? 'Creating...' : 'Generate Report'}
+                {isCreatingReport ? 'Creating...' : 'Generate Report'}
               </Button>
             </div>
           </div>
