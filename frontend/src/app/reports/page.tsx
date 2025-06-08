@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FileText, Calendar, Eye, Edit3, Download, Trash2, Archive, MoreVertical, FileType } from 'lucide-react';
+import { Plus, FileText, Calendar, Eye, Edit3, Download, Trash2, Archive, MoreVertical, FileType, X } from 'lucide-react';
 import { useReports } from '@/lib/hooks/use-reports';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,9 +14,60 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [quickForm, setQuickForm] = useState({ title: '', topic: '' });
+  const [isCreating, setIsCreating] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<{id: string, title: string} | null>(null);
 
   const handleCreateNew = () => {
-    router.push('/reports/new');
+    setShowCreateModal(true);
+  };
+
+  const handleQuickCreate = async () => {
+    if (!quickForm.title.trim() || !quickForm.topic.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide both title and topic",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          title: quickForm.title,
+          topic: quickForm.topic,
+          reportType: 'research_paper',
+          academicLevel: 'undergraduate',
+          wordLimit: 5000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create report');
+      }
+
+      const data = await response.json();
+      router.push(`/research/${data.projectId}/generate`);
+    } catch (error) {
+      toast({
+        title: "Creation failed",
+        description: "Failed to create report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreating(false);
+      setShowCreateModal(false);
+      setQuickForm({ title: '', topic: '' });
+    }
   };
 
   const handleEditReport = (reportId: string) => {
@@ -75,27 +126,32 @@ export default function ReportsPage() {
     }
   };
 
-  const handleDeleteReport = async (reportId: string, reportTitle: string) => {
-    const confirmMessage = `Are you sure you want to permanently delete "${reportTitle}"?\n\nThis action cannot be undone and will remove:\n- All report content and sections\n- Generated PDFs and files\n- Research data and citations`;
+  const handleDeleteReport = (reportId: string, reportTitle: string) => {
+    setReportToDelete({ id: reportId, title: reportTitle });
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!reportToDelete) return;
     
-    if (confirm(confirmMessage)) {
-      setDeletingReportId(reportId);
-      try {
-        await deleteReport(reportId);
-        toast({
-          title: "Report deleted",
-          description: `"${reportTitle}" has been permanently deleted.`,
-        });
-        setSelectedReport(null);
-      } catch (error) {
-        toast({
-          title: "Delete failed",
-          description: "Failed to delete the report. Please try again.",
-          variant: "destructive"
-        });
-      } finally {
-        setDeletingReportId(null);
-      }
+    setDeletingReportId(reportToDelete.id);
+    try {
+      await deleteReport(reportToDelete.id);
+      toast({
+        title: "Report deleted",
+        description: `"${reportToDelete.title}" has been permanently deleted.`,
+      });
+      setSelectedReport(null);
+    } catch (error) {
+      toast({
+        title: "Delete failed",
+        description: "Failed to delete the report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setDeletingReportId(null);
+      setShowDeleteModal(false);
+      setReportToDelete(null);
     }
   };
 
@@ -183,46 +239,6 @@ export default function ReportsPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePreviewReport(report.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditReport(report.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteReport(report.id, report.title);
-                    }}
-                    disabled={deletingReportId === report.id}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    {deletingReportId === report.id ? (
-                      <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
               </div>
 
               <h3 className="font-semibold text-lg mb-2 line-clamp-2">
@@ -237,9 +253,6 @@ export default function ReportsPage() {
                 <div className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
                   {formatDate(report.updatedAt)}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>{report.sections?.length || 0} sections</span>
                 </div>
               </div>
 
@@ -300,6 +313,127 @@ export default function ReportsPage() {
               )}
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Quick Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Create New Report</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowCreateModal(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Report Title *
+                </label>
+                <input
+                  type="text"
+                  value={quickForm.title}
+                  onChange={(e) => setQuickForm(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Enter your report title"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Research Topic *
+                </label>
+                <textarea
+                  value={quickForm.topic}
+                  onChange={(e) => setQuickForm(prev => ({ ...prev, topic: e.target.value }))}
+                  placeholder="Describe what your report will cover"
+                  rows={3}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="text-sm text-gray-600">
+                <p>Default settings will be used:</p>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>Research Paper format</li>
+                  <li>Undergraduate level</li>
+                  <li>5,000 word target</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateModal(false)}
+                disabled={isCreating}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleQuickCreate}
+                disabled={isCreating || !quickForm.title.trim() || !quickForm.topic.trim()}
+              >
+                {isCreating ? 'Creating...' : 'Generate Report'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && reportToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-red-600">Delete Report</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-gray-700">
+                Are you sure you want to permanently delete <strong>"{reportToDelete.title}"</strong>?
+              </p>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-800 text-sm font-medium mb-2">This action cannot be undone and will remove:</p>
+                <ul className="text-red-700 text-sm space-y-1">
+                  <li>• All report content and sections</li>
+                  <li>• Generated PDFs and files</li>
+                  <li>• Research data and citations</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingReportId === reportToDelete.id}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDelete}
+                disabled={deletingReportId === reportToDelete.id}
+              >
+                {deletingReportId === reportToDelete.id ? 'Deleting...' : 'Delete Report'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

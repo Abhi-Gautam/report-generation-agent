@@ -70,7 +70,7 @@ export default function EditReportPage() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white">
+      <div className="flex items-center justify-between p-4 border-b bg-white sticky top-0 z-10">
         <div>
           <h1 className="text-xl font-semibold">{report?.title}</h1>
           <p className="text-sm text-gray-600">{report?.topic}</p>
@@ -111,7 +111,7 @@ export default function EditReportPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Sidebar - Section Navigator */}
         <div className="w-80 border-r bg-gray-50 overflow-y-auto">
           <SectionNavigator

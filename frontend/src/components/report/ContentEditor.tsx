@@ -24,7 +24,6 @@ interface ContentEditorProps {
 export function ContentEditor({ section, onContentChange, isUpdating }: ContentEditorProps) {
   const [editorContent, setEditorContent] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [editorMode, setEditorMode] = useState<'latex' | 'markdown'>('latex');
   const editorRef = useRef<any>(null);
 
   useEffect(() => {
@@ -105,28 +104,6 @@ E = mc^2
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Mode Toggle */}
-            <div className="flex rounded-lg overflow-hidden border">
-              <Button
-                variant={editorMode === 'latex' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setEditorMode('latex')}
-                className="rounded-none"
-              >
-                <Code className="w-4 h-4 mr-1" />
-                LaTeX
-              </Button>
-              <Button
-                variant={editorMode === 'markdown' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setEditorMode('markdown')}
-                className="rounded-none"
-              >
-                <Type className="w-4 h-4 mr-1" />
-                Markdown
-              </Button>
-            </div>
-            
             {/* Templates */}
             <Button
               size="sm"
@@ -170,7 +147,7 @@ E = mc^2
         <div className="flex-1">
           <Editor
             height="100%"
-            language={editorMode === 'latex' ? 'latex' : 'markdown'}
+            language="latex"
             value={editorContent}
             onChange={handleEditorChange}
             onMount={(editor, monaco) => {
