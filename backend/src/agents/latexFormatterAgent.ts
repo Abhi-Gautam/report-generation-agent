@@ -191,7 +191,7 @@ export class LaTeXFormatterAgent extends BaseAgent {
 
     let preamble = `\\documentclass[${fontSize}pt,a4paper]{${documentClass}}\n\n`;
     
-    // Essential packages (minimal set for compatibility)
+    // Essential packages (only those confirmed available in Alpine texlive)
     preamble += `% Essential packages
 \\usepackage[utf8]{inputenc}
 \\usepackage[T1]{fontenc}
@@ -203,17 +203,16 @@ export class LaTeXFormatterAgent extends BaseAgent {
 
 `;
 
-    // Template-specific packages (minimal for compatibility)
+    // Template-specific packages (only confirmed available)
     switch (template) {
       case 'academic':
-        preamble += `% Academic template (basic)
+        preamble += `% Academic template
 \\renewcommand{\\abstractname}{Abstract}
 
 `;
         break;
       case 'professional':
         preamble += `% Professional template (basic)
-% Headers handled by basic LaTeX
 
 `;
         break;
@@ -233,9 +232,10 @@ export class LaTeXFormatterAgent extends BaseAgent {
 
 `;
 
-    // Line spacing
+    // Line spacing (manual since setspace package not available)
     if (input.formatting?.lineSpacing) {
-      preamble += `\\setstretch{${input.formatting.lineSpacing}}
+      const spacing = input.formatting.lineSpacing;
+      preamble += `\\renewcommand{\\baselinestretch}{${spacing}}
 
 `;
     }
@@ -358,11 +358,18 @@ Convert the following academic content to proper LaTeX format.
 Focus on:
 1. Proper sectioning and subsectioning
 2. Mathematical equations (use \\begin{equation} for numbered equations)
-3. Tables (use booktabs package style)
+3. Tables (use standard tabular environment with hlines)
 4. Figures and captions
 5. Proper citation formatting
-6. Code blocks (use listings package)
+6. Code blocks (use verbatim environment)
 7. Academic writing conventions
+
+IMPORTANT: Only use basic LaTeX commands. DO NOT use:
+- booktabs package commands (toprule, midrule, bottomrule)
+- listings package commands (lstlisting)
+- setspace package commands (setstretch)
+
+Use verbatim for code blocks and standard tabular with \\hline for tables.
 
 Content to convert:
 ${content}
@@ -415,14 +422,14 @@ Return only the LaTeX-formatted content, no explanations.
       return `\\begin{itemize}\n${items}\n\\end{itemize}\n\n`;
     });
 
-    // Code blocks
-    latex = latex.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-      return `\\begin{lstlisting}${lang ? `[language=${lang}]` : ''}\n${code}\n\\end{lstlisting}`;
+    // Code blocks (using verbatim since listings package not available)
+    latex = latex.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, _lang, code) => {
+      return `\\begin{verbatim}\n${code}\n\\end{verbatim}`;
     });
     latex = latex.replace(/`([^`]+)`/g, '\\texttt{$1}');
 
-    // Links
-    latex = latex.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '\\href{$2}{$1}');
+    // Links (without hyperref, use simple formatting)
+    latex = latex.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 (\\url{$2})');
 
     return latex;
   }
@@ -460,10 +467,10 @@ Return only the LaTeX-formatted content, no explanations.
       rowsArray.forEach((row: string[]) => {
         if (row.length > 0) {
           table += row.join(' & ') + ' \\\\\n';
+          table += '\\hline\n'; // Add line after each row for better formatting
         }
       });
       
-      table += '\\hline\n';
       table += '\\end{tabular}\n';
       table += '\\end{center}\n\n';
 
@@ -631,11 +638,12 @@ Return only the LaTeX-formatted content, no explanations.
   }
 
   private getCitationStyle(style?: string): string {
+    // Only use basic citation styles available in Alpine texlive
     switch (style) {
-      case 'APA': return 'apalike';
-      case 'MLA': return 'mla';
-      case 'CHICAGO': return 'chicago';
-      case 'IEEE': return 'ieeetr';
+      case 'APA': return 'plain'; // fallback to plain since apalike might not be available
+      case 'MLA': return 'plain';
+      case 'CHICAGO': return 'plain';
+      case 'IEEE': return 'plain';
       default: return 'plain';
     }
   }

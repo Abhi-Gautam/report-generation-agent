@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { Request, Response } from 'express';
 import { database } from '../services/database';
-import { projectStorage } from '../services/projectStorage';
-import { latexCompiler } from '../services/latexCompiler';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/request';
@@ -88,12 +86,8 @@ router.post('/:projectId', authenticateToken, async (req: AuthenticatedRequest, 
       }
     });
 
-    // Save section file
-    await projectStorage.saveSection(projectId, section.id, content, {
-      title,
-      type,
-      ...metadata
-    });
+    // Note: Section files no longer saved to disk with new agent-based system
+    // All section data is stored in database and used by agents as needed
 
 
     res.status(201).json({
@@ -141,15 +135,8 @@ router.put('/:projectId/:sectionId', authenticateToken, async (req: Authenticate
       data: updateData
     });
 
-    // Update section file if content changed
-    if (content !== undefined) {
-      await projectStorage.saveSection(projectId, sectionId, content, {
-        title: title || section.title,
-        type: type || section.type,
-        ...metadata
-      });
-
-    }
+    // Note: Section files no longer saved to disk with new agent-based system
+    // All section data is stored in database and used by agents as needed
 
     res.json({
       success: true,
@@ -187,8 +174,8 @@ router.delete('/:projectId/:sectionId', authenticateToken, async (req: Authentic
       }
     });
 
-    // Delete section file
-    await projectStorage.deleteSection(projectId, sectionId);
+    // Note: No section files to delete with new agent-based system
+    // All data managed through database
 
 
     res.json({
@@ -290,7 +277,7 @@ router.post('/:projectId/reorder', async (req: Request, res: Response): Promise<
   }
 });
 
-// POST /api/sections/:projectId/compile - Compile all sections to PDF
+// POST /api/sections/:projectId/compile - Compile all sections to PDF using new agent system
 router.post('/:projectId/compile', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { projectId } = req.params;
@@ -307,41 +294,70 @@ router.post('/:projectId/compile', authenticateToken, async (req: AuthenticatedR
       return;
     }
 
-    // Generate main.tex file
-    const mainTexPath = await projectStorage.generateMainTexFile(projectId);
+    // Get project details
+    const project = await database.project.findFirst({
+      where: { id: projectId, userId }
+    });
+
+    if (!project) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+      return;
+    }
 
     if (format === 'latex') {
-      // Return LaTeX source
-      const latexContent = await projectStorage.loadSection(projectId, 'main');
-      res.json({
-        success: true,
-        data: { content: latexContent, path: mainTexPath }
+      // Use agent-based LaTeX generation for LaTeX format
+      const { LaTeXFormatterAgent } = await import('../agents/latexFormatterAgent');
+      const websocket = req.app.get('websocket');
+      
+      // Fetch sections
+      const sections = await database.reportSection.findMany({
+        where: { projectId },
+        orderBy: { order: 'asc' }
       });
-    } else {
-      // Compile to PDF
-      const result = await latexCompiler.compileDocument(
-        await require('fs').promises.readFile(mainTexPath, 'utf8'),
-        'main',
-        require('path').dirname(mainTexPath)
-      );
 
-      if (!result.success) {
-        res.status(500).json({
+      if (sections.length === 0) {
+        res.status(400).json({
           success: false,
-          error: `Compilation failed: ${result.error}`,
-          log: result.log
+          error: 'No sections found for compilation'
         });
         return;
       }
 
-      const pdfPath = mainTexPath.replace('.tex', '.pdf');
+      const latexFormatter = new LaTeXFormatterAgent(websocket);
+      const result = await latexFormatter.execute({
+        sections: sections.map(section => ({
+          id: section.id,
+          title: section.title,
+          type: section.type as 'ABSTRACT' | 'INTRODUCTION' | 'CONCLUSION' | 'REFERENCES' | 'TEXT',
+          content: section.content,
+          order: section.order,
+          metadata: section.metadata
+        })),
+        title: project.title,
+        author: 'Research Agent',
+        metadata: {
+          citationStyle: 'APA',
+          template: 'academic'
+        }
+      });
+
       res.json({
         success: true,
         data: { 
-          path: pdfPath,
-          attempts: result.attempts,
-          log: result.log
+          content: result.latexDocument,
+          warnings: result.warnings,
+          metadata: result.metadata
         }
+      });
+    } else {
+      // Redirect to PDF generation endpoint in projects route
+      res.status(302).json({
+        success: false,
+        error: 'PDF compilation moved to /api/projects/:id/generate endpoint',
+        redirect: `/api/projects/${projectId}/generate`
       });
     }
   } catch (error) {
@@ -371,48 +387,80 @@ router.get('/:projectId/download/:format', authenticateToken, async (req: Authen
 
     switch (format) {
       case 'pdf':
-        // Compile and download PDF
-        const mainTexPath = await projectStorage.generateMainTexFile(projectId);
-        const texContent = await require('fs').promises.readFile(mainTexPath, 'utf8');
-        
-        const result = await latexCompiler.compileDocument(
-          texContent,
-          'main',
-          require('path').dirname(mainTexPath)
-        );
+        // Redirect to PDF download endpoint in projects route (uses existing agent-based PDF)
+        res.redirect(`/api/projects/${projectId}/download`);
+        break;
 
-        if (!result.success) {
-          res.status(500).json({
+      case 'latex':
+        // Generate LaTeX using agent-based system
+        const { LaTeXFormatterAgent } = await import('../agents/latexFormatterAgent');
+        const websocket = req.app.get('websocket');
+        
+        // Get project details
+        const project = await database.project.findFirst({
+          where: { id: projectId, userId }
+        });
+
+        if (!project) {
+          res.status(404).json({
             success: false,
-            error: 'Failed to compile PDF'
+            error: 'Project not found'
           });
           return;
         }
 
-        const pdfPath = mainTexPath.replace('.tex', '.pdf');
-        res.download(pdfPath, `project_${projectId}.pdf`);
-        break;
+        // Fetch sections
+        const sections = await database.reportSection.findMany({
+          where: { projectId },
+          orderBy: { order: 'asc' }
+        });
 
-      case 'latex':
-        // Download LaTeX source
-        const latexPath = await projectStorage.generateMainTexFile(projectId);
-        res.download(latexPath, `project_${projectId}.tex`);
+        if (sections.length === 0) {
+          res.status(400).json({
+            success: false,
+            error: 'No sections found for LaTeX generation'
+          });
+          return;
+        }
+
+        const latexFormatter = new LaTeXFormatterAgent(websocket);
+        const result = await latexFormatter.execute({
+          sections: sections.map(section => ({
+            id: section.id,
+            title: section.title,
+            type: section.type as 'ABSTRACT' | 'INTRODUCTION' | 'CONCLUSION' | 'REFERENCES' | 'TEXT',
+            content: section.content,
+            order: section.order,
+            metadata: section.metadata
+          })),
+          title: project.title,
+          author: 'Research Agent',
+          metadata: {
+            citationStyle: 'APA',
+            template: 'academic'
+          }
+        });
+
+        // Set headers for LaTeX file download
+        res.set({
+          'Content-Type': 'application/x-latex',
+          'Content-Disposition': `attachment; filename="${project.title.replace(/[^a-z0-9]/gi, '_')}.tex"`
+        });
+        res.send(result.latexDocument);
         break;
 
       case 'zip':
-        // Download complete project as ZIP
-        const zipBuffer = await projectStorage.createZipExport(projectId);
-        res.set({
-          'Content-Type': 'application/zip',
-          'Content-Disposition': `attachment; filename="project_${projectId}.zip"`
+        // ZIP export not implemented in agent system yet
+        res.status(501).json({
+          success: false,
+          error: 'ZIP export not yet implemented with new agent system'
         });
-        res.send(zipBuffer);
         break;
 
       default:
         res.status(400).json({
           success: false,
-          error: 'Invalid format. Use pdf, latex, or zip'
+          error: 'Invalid format. Use pdf or latex'
         });
     }
   } catch (error) {

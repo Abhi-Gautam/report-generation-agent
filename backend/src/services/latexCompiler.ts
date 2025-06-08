@@ -130,7 +130,10 @@ export class LaTeXCompiler {
           }
           
         } catch (compilationError: any) {
-          logger.warn(`Compilation error on attempt ${attempts}:`, compilationError.stderr);
+          logger.error(`LaTeX compilation error on attempt ${attempts}:`);
+          logger.error(`STDOUT: ${compilationError.stdout || 'No stdout'}`);
+          logger.error(`STDERR: ${compilationError.stderr || 'No stderr'}`);
+          logger.error(`Error message: ${compilationError.message || 'No message'}`);
           
           if (attempts === this.maxRetries) {
             return {

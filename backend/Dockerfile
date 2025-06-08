@@ -2,7 +2,7 @@ FROM node:24-alpine
 
 WORKDIR /app/backend
 
-# Install system dependencies including comprehensive LaTeX
+# Install system dependencies including basic LaTeX (only packages that exist in Alpine)
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -13,38 +13,37 @@ RUN apk add --no-cache \
     texlive \
     texlive-luatex \
     texlive-xetex \
-    texlive-latex-extra \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
-    texlive-fonts-extra \
     py3-pygments \
     zip \
     unzip \
     && rm -rf /var/cache/apk/*
 
+
 # Tell Puppeteer to skip installing Chromium. We'll be using the installed package.
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
+# Copy package files first for dependency caching
 COPY backend/package.json ./package.json
 COPY backend/.npmrc ./.npmrc
+
+# Install backend dependencies (this will be cached if package.json unchanged)
+RUN npm install --legacy-peer-deps --no-audit --no-fund
+
+# Copy prisma schema and generate client
 COPY backend/prisma ./prisma/
+RUN npx prisma generate
+
+# Copy source code and config (this will invalidate cache when source changes)
 COPY backend/tsconfig.json ./tsconfig.json
 COPY backend/src ./src
 
-# Install backend dependencies
-RUN npm install --legacy-peer-deps --no-audit --no-fund
-
-# Generate Prisma client
-RUN npx prisma generate
-
-# Build the application
+# Build the application (will run every time src changes)
 RUN npm run build
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-RUN chown -R nextjs:nodejs /app
+# Create user and change ownership only after all build steps are complete
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 && \
+    chown -R nextjs:nodejs /app/backend
 USER nextjs
 
 EXPOSE 4000

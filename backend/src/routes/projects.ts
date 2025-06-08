@@ -772,6 +772,21 @@ async function generatePDFFromSections(
 
     if (!compilationResult.success) {
       const errorMessages = compilationResult.finalErrors.map(e => e.message).join('; ');
+      logger.error(`LaTeX compilation failed for project ${projectId}:`);
+      logger.error(`Total attempts: ${compilationResult.totalAttempts}`);
+      logger.error(`Final errors: ${errorMessages}`);
+      
+      // Log each compilation attempt for debugging
+      compilationResult.attempts.forEach((attempt, index) => {
+        logger.error(`Attempt ${index + 1}: success=${attempt.success}, errors=${attempt.errors.length}`);
+        if (attempt.log) {
+          logger.error(`Attempt ${index + 1} log:\n${attempt.log}`);
+        }
+        attempt.errors.forEach((error, errorIndex) => {
+          logger.error(`  Error ${errorIndex + 1}: ${error.message} (Line: ${error.line || 'unknown'})`);
+        });
+      });
+      
       throw new Error(`LaTeX compilation failed after ${compilationResult.totalAttempts} attempts: ${errorMessages}`);
     }
 
