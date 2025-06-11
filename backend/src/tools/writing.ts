@@ -1,6 +1,8 @@
 import { Tool, ToolResult, ToolParameter, ResearchOutline } from '../shared'; // Path already correct, was 'shared' now '../shared' relative to src/tools
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LoggerService } from '../services/logger';
+import { generateBaseLatexTemplate } from '../templates/baseLatexTemplate';
+import { parseLatexIntoSections } from '../utils/latexSectionParser';
 
 export interface WritingInput {
   outline: ResearchOutline;
@@ -14,7 +16,7 @@ export interface WritingInput {
 
 export class WritingTool implements Tool {
   public name = 'Writing';
-  public description = 'Generate research paper content from outline and research data';
+  public description = 'Generate LaTeX research paper content from outline and research data';
   public parameters: ToolParameter[] = [
     {
       name: 'outline',
@@ -50,31 +52,25 @@ export class WritingTool implements Tool {
     try {
       const { outline, researchData, preferences = {} } = input;
       
-      let fullContent = '';
+      this.logger.info('Starting LaTeX content generation');
       
-      // Generate title and abstract
-      fullContent += this.generateTitle(outline.title);
-      fullContent += this.generateAbstract(outline.abstract, outline.keywords);
+      // Generate complete LaTeX document using AI
+      const latexContent = await this.generateLatexDocument(outline, researchData, preferences);
       
-      // Generate each section
-      for (const section of outline.sections) {
-        const sectionData = researchData.find(rd => rd.section === section.title);
-        const sectionContent = await this.generateSection(section, sectionData, preferences);
-        fullContent += sectionContent;
-      }
+      // Parse the generated LaTeX into sections
+      const parsedSections = parseLatexIntoSections(latexContent);
       
-      // Add references section
-      fullContent += this.generateReferences(researchData, preferences.citationStyle);
+      this.logger.info(`Generated ${parsedSections.length} LaTeX sections`);
       
       const duration = Date.now() - startTime;
 
       return {
         success: true,
-        data: fullContent,
+        data: latexContent,
         metadata: {
           duration,
-          wordCount: this.countWords(fullContent),
-          sectionCount: outline.sections.length
+          wordCount: this.countWords(latexContent),
+          sectionCount: parsedSections.length
         }
       };
 
@@ -82,7 +78,7 @@ export class WritingTool implements Tool {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
-      this.logger.error('Content writing failed:', error);
+      this.logger.error('LaTeX content generation failed:', error);
 
       return {
         success: false,
@@ -92,181 +88,199 @@ export class WritingTool implements Tool {
     }
   }
 
-  private generateTitle(title: string): string {
-    return `# ${title}\n\n`;
-  }
-
-  private generateAbstract(abstract: string, keywords: string[]): string {
-    return `## Abstract\n\n${abstract}\n\n**Keywords:** ${keywords.join(', ')}\n\n---\n\n`;
-  }
-
-  private async generateSection(
-    section: any, 
-    sectionData: any, 
+  /**
+   * Generate complete LaTeX document using AI
+   */
+  private async generateLatexDocument(
+    outline: ResearchOutline, 
+    researchData: any[], 
     preferences: any
   ): Promise<string> {
     const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    // Prepare research data for this section
-    const researchContent = sectionData ? {
-      summary: sectionData.analysis?.summary || '',
-      keyPoints: sectionData.analysis?.keyPoints || [],
-      quotes: sectionData.analysis?.relevantQuotes || [],
-      sources: sectionData.analysis?.sources || []
-    } : null;
-
-    const prompt = this.buildSectionPrompt(section, researchContent, preferences);
+    const prompt = this.buildLatexPrompt(outline, researchData, preferences);
     
     try {
       const result = await model.generateContent(prompt);
-      const content = result.response.text();
+      let latexContent = result.response.text();
       
-      return this.formatSectionContent(section.title, content, section.subsections);
+      // Validate and enhance the LaTeX content
+      latexContent = this.validateAndEnhanceLatex(latexContent, outline);
+      
+      return latexContent;
       
     } catch (error) {
-      this.logger.warn(`Failed to generate AI content for section ${section.title}, using fallback`);
-      return this.generateFallbackSection(section, sectionData);
+      this.logger.warn('Failed to generate AI LaTeX content, using fallback');
+      return this.generateFallbackLatex(outline, researchData, preferences);
     }
   }
 
-  private buildSectionPrompt(section: any, researchContent: any, preferences: any): string {
+  /**
+   * Build comprehensive prompt for LaTeX generation
+   */
+  private buildLatexPrompt(outline: ResearchOutline, researchData: any[], preferences: any): string {
     const writingStyle = preferences.writingStyle || 'ACADEMIC';
     const detailLevel = preferences.detailLevel || 'MODERATE';
+    const citationStyle = preferences.citationStyle || 'APA';
     
-    return `
-Write a comprehensive section for a research paper with the following specifications:
+    // Prepare research summaries
+    const researchSummaries = researchData.map(rd => ({
+      section: rd.section,
+      summary: rd.analysis?.summary || '',
+      keyPoints: rd.analysis?.keyPoints || [],
+      sources: rd.analysis?.sources || []
+    }));
 
-Section Title: "${section.title}"
-Subsections: ${section.subsections?.join(', ') || 'None specified'}
-Target Word Count: ${section.estimatedWords || 500} words
-Writing Style: ${writingStyle}
-Detail Level: ${detailLevel}
+    return `You are a LaTeX academic writing expert. Generate ONLY the document content sections in pure LaTeX format.
 
-Key Points to Cover:
-${section.keyPoints?.map((point: string) => `- ${point}`).join('\n') || 'No specific points provided'}
+DOCUMENT REQUIREMENTS:
+- Title: "${outline.title}"
+- Abstract: "${outline.abstract}"
+- Keywords: ${outline.keywords.join(', ')}
+- Writing Style: ${writingStyle}
+- Detail Level: ${detailLevel}
+- Citation Style: ${citationStyle}
 
-${researchContent ? `
-Research Data Available:
-Summary: ${researchContent.summary}
+SECTIONS TO INCLUDE:
+${outline.sections.map(section => `
+- ${section.title}
+  Key Points: ${section.keyPoints?.join(', ') || 'General coverage'}
+  Estimated Words: ${section.estimatedWords || 500}
+`).join('')}
 
-Key Findings:
-${researchContent.keyPoints.map((point: string) => `- ${point}`).join('\n')}
+RESEARCH DATA AVAILABLE:
+${researchSummaries.map(rd => `
+Section: ${rd.section}
+Summary: ${rd.summary}
+Key Findings: ${rd.keyPoints.join(', ')}
+Sources: ${rd.sources.map((s: any) => s.title).join(', ')}
+`).join('')}
 
-Relevant Quotes:
-${researchContent.quotes.map((quote: string) => `- ${quote}`).join('\n')}
+LATEX REQUIREMENTS:
+1. Generate ONLY section content - NO document structure (\\documentclass, \\begin{document}, etc.)
+2. Use \\section{Title} commands for main sections
+3. DO NOT include \\cite{} commands for now (citations are temporarily disabled)
+4. Use academic LaTeX formatting (\\textbf{}, \\emph{}, \\subsection{}, etc.)
+5. Include \\label{sec:sectionname} for each section
+6. Write complete, publication-ready content for each section
+7. Subsections should be inside section content, not separate sections
+8. Use ONLY Alpine Linux compatible commands
 
-Sources:
-${researchContent.sources.map((source: any) => `- ${source.title} (${source.url})`).join('\n')}
-` : 'No specific research data provided for this section.'}
+EXAMPLE OUTPUT FORMAT:
+\\section{Introduction}
+\\label{sec:introduction}
 
-Guidelines:
-1. Write in ${writingStyle.toLowerCase()} style
-2. Include proper transitions between subsections
-3. Integrate research findings naturally
-4. Use appropriate citations (indicate with [Source: Title])
-5. Maintain academic rigor and clarity
-6. Ensure content flows logically
-7. Include specific examples and evidence where appropriate
+This paper presents comprehensive research on [topic]. The study addresses [research problem] through [methodology].
 
-Write the complete section content now:
-    `;
+\\subsection{Background}
+Relevant background information and context...
+
+\\section{Literature Review}
+\\label{sec:literature-review}
+
+Extensive review of existing research...
+
+Generate ONLY the section content (not the full document structure) with substantial, well-researched content for each section:`;
   }
 
-  private formatSectionContent(title: string, content: string, subsections?: string[]): string {
-    let formatted = `## ${title}\n\n`;
+  /**
+   * Validate and enhance generated LaTeX content
+   */
+  private validateAndEnhanceLatex(latexContent: string, outline: ResearchOutline): string {
+    let enhanced = latexContent.trim();
     
-    // Clean up the content
-    content = content.trim();
+    // Clean up AI response (remove markdown code blocks if present)
+    enhanced = enhanced.replace(/```latex\n?/g, '').replace(/```\n?/g, '');
     
-    // If subsections are defined, try to organize content accordingly
-    if (subsections && subsections.length > 0) {
-      // Split content into paragraphs
-      const paragraphs = content.split('\n\n').filter(p => p.trim());
-      const paragraphsPerSubsection = Math.ceil(paragraphs.length / subsections.length);
-      
-      subsections.forEach((subsection, index) => {
-        formatted += `### ${subsection}\n\n`;
-        
-        const startIdx = index * paragraphsPerSubsection;
-        const endIdx = Math.min(startIdx + paragraphsPerSubsection, paragraphs.length);
-        const subsectionParagraphs = paragraphs.slice(startIdx, endIdx);
-        
-        formatted += subsectionParagraphs.join('\n\n') + '\n\n';
-      });
-    } else {
-      formatted += content + '\n\n';
-    }
-    
-    return formatted;
-  }
-
-  private generateFallbackSection(section: any, sectionData: any): string {
-    let content = `## ${section.title}\n\n`;
-    
-    // Use key points as basis for content
-    if (section.keyPoints && section.keyPoints.length > 0) {
-      section.keyPoints.forEach((point: string) => {
-        content += `${point} This is an important aspect that requires further investigation and analysis to understand its full implications and applications.\n\n`;
-      });
-    }
-    
-    // Add research summary if available
-    if (sectionData?.analysis?.summary) {
-      content += `${sectionData.analysis.summary}\n\n`;
-    }
-    
-    // Add subsections if defined
-    if (section.subsections && section.subsections.length > 0) {
-      section.subsections.forEach((subsection: string) => {
-        content += `### ${subsection}\n\nThis subsection covers important aspects related to ${subsection.toLowerCase()}. Further research and analysis are needed to provide comprehensive coverage of this topic.\n\n`;
-      });
-    }
-    
-    return content;
-  }
-
-  private generateReferences(researchData: any[], citationStyle: string = 'APA'): string {
-    let references = '## References\n\n';
-    
-    const allSources = researchData
-      .flatMap(rd => rd.analysis?.sources || [])
-      .filter((source, index, self) => 
-        index === self.findIndex(s => s.url === source.url)
-      );
-
-    allSources.forEach((source, index) => {
-      const citation = this.formatCitation(source, citationStyle, index + 1);
-      references += `${citation}\n\n`;
+    // Always wrap content in complete document template
+    // This prevents duplicate \documentclass issues
+    const template = generateBaseLatexTemplate({
+      title: outline.title,
+      author: 'Research Agent',
+      citationStyle: 'APA',
+      includeTableOfContents: true,
+      includeBibliography: false // Temporarily disable bibliography
     });
     
-    return references;
-  }
-
-  private formatCitation(source: any, style: string, index: number): string {
-    const domain = this.extractDomain(source.url);
-    const currentYear = new Date().getFullYear();
+    // If AI generated a complete document, extract only the body content
+    const bodyMatch = enhanced.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
+    if (bodyMatch) {
+      // Extract content between \begin{document} and \end{document}
+      let bodyContent = bodyMatch[1].trim();
+      
+      // Remove title and toc if present (template will add these)
+      bodyContent = bodyContent.replace(/\\maketitle\s*/g, '');
+      bodyContent = bodyContent.replace(/\\tableofcontents\s*/g, '');
+      bodyContent = bodyContent.replace(/\\newpage\s*/g, '');
+      
+      enhanced = template.replace('% SECTIONS_PLACEHOLDER', bodyContent);
+    } else {
+      // Content is just sections, wrap in template
+      enhanced = template.replace('% SECTIONS_PLACEHOLDER', enhanced);
+    }
     
-    switch (style.toUpperCase()) {
-      case 'APA':
-        return `${index}. ${source.title}. (${currentYear}). Retrieved from ${source.url}`;
-      case 'MLA':
-        return `${index}. "${source.title}." *${domain}*, ${currentYear}, ${source.url}.`;
-      case 'CHICAGO':
-        return `${index}. "${source.title}." Accessed ${new Date().toLocaleDateString()}. ${source.url}.`;
-      case 'IEEE':
-        return `[${index}] "${source.title}," ${domain}, ${currentYear}. [Online]. Available: ${source.url}`;
-      default:
-        return `${index}. ${source.title} - ${source.url}`;
-    }
+    // Ensure sections have proper labels (only if missing)
+    enhanced = enhanced.replace(/\\section\{([^}]+)\}(?!\s*\\label)/g, (match, title) => {
+      const labelId = title.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+      return `${match}\n\\label{sec:${labelId}}`;
+    });
+    
+    return enhanced;
   }
 
-  private extractDomain(url: string): string {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return 'Website';
-    }
+  /**
+   * Generate fallback LaTeX content when AI fails
+   */
+  private generateFallbackLatex(
+    outline: ResearchOutline, 
+    researchData: any[], 
+    preferences: any
+  ): string {
+    this.logger.info('Generating fallback LaTeX content');
+    
+    const template = generateBaseLatexTemplate({
+      title: outline.title,
+      author: 'Research Agent',
+      citationStyle: preferences.citationStyle || 'APA',
+      includeTableOfContents: true,
+      includeBibliography: false // Temporarily disable bibliography
+    });
+
+    // Generate basic sections
+    const sections = outline.sections.map((section) => {
+      const sectionData = researchData.find(rd => rd.section === section.title);
+      
+      let content = `\\section{${section.title}}
+\\label{sec:${section.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}}
+
+`;
+
+      // Add section content based on key points
+      if (section.keyPoints && section.keyPoints.length > 0) {
+        section.keyPoints.forEach(point => {
+          content += `${point} This represents an important aspect that requires comprehensive analysis and investigation to understand its full implications and applications in the research context.\n\n`;
+        });
+      }
+
+      // Add research summary if available
+      if (sectionData?.analysis?.summary) {
+        content += `\\subsection{Research Findings}\n\n${sectionData.analysis.summary}\n\n`;
+      }
+
+      // Add subsections if defined
+      if (section.subsections && section.subsections.length > 0) {
+        section.subsections.forEach(subsection => {
+          content += `\\subsection{${subsection}}\n\nThis subsection covers important aspects related to ${subsection.toLowerCase()}. Further research and analysis are needed to provide comprehensive coverage of this topic.\n\n`;
+        });
+      }
+
+      return content;
+    }).join('\n');
+
+    return template.replace('% SECTIONS_PLACEHOLDER', sections);
   }
+
+  // Removed unused extractDomain method
 
   private countWords(text: string): number {
     return text.trim().split(/\s+/).length;

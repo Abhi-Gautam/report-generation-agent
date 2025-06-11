@@ -8,6 +8,7 @@ import { WebSocketService } from '../services/websocket';
 import { LoggerService } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
 import { AuthenticatedRequest } from '../types/request';
+import { parseLatexIntoSections } from '../utils/latexSectionParser';
 import * as path from 'path';
 import * as fs from 'fs';
 // import { v4 as uuidv4 } from 'uuid'; // Unused
@@ -165,6 +166,98 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res): Pr
   }
 });
 
+// POST /api/projects/:id/compile - Just recompile LaTeX to PDF
+router.post('/:id/compile', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const projectId = req.params.id;
+    const userId = req.user!.id;
+    
+    // Verify project ownership
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        userId: userId
+      },
+      include: {
+        sections: {
+          orderBy: { order: 'asc' }
+        }
+      }
+    });
+
+    if (!project) {
+      res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+      return;
+    }
+
+    if (!project.sections || project.sections.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'No sections found. Please generate content first.'
+      });
+      return;
+    }
+
+    // Generate PDF from existing sections (no AI research)
+    const websocket = req.app.get('websocket') as WebSocketService;
+    const pdfPath = await generatePDFFromSections(projectId, project.title, 'compile-session', websocket);
+    
+    // Update or create file record
+    // First, try to find existing PDF file for this project
+    const existingFile = await prisma.projectFile.findFirst({
+      where: {
+        projectId: projectId,
+        fileType: 'PDF'
+      }
+    });
+
+    if (existingFile) {
+      // Update existing file
+      await prisma.projectFile.update({
+        where: { id: existingFile.id },
+        data: {
+          filePath: pdfPath,
+          metadata: {
+            generatedAt: new Date(),
+            generationMethod: 'recompile'
+          }
+        }
+      });
+    } else {
+      // Create new file record
+      await prisma.projectFile.create({
+        data: {
+          projectId: projectId,
+          fileName: `${project.title}.pdf`,
+          filePath: pdfPath,
+          fileType: 'PDF',
+          fileSize: 0,
+          metadata: {
+            generatedAt: new Date(),
+            generationMethod: 'recompile'
+          }
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'PDF recompiled successfully',
+      pdfPath
+    });
+
+  } catch (error) {
+    logger.error('LaTeX compilation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'LaTeX compilation failed'
+    });
+  }
+});
+
 //POST /api/projects/:id/generate - Start research generation
 router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest, res): Promise<void> => {
   try {
@@ -261,10 +354,10 @@ router.post('/:id/generate', authenticateToken, async (req: AuthenticatedRequest
           }
         });
 
-        // Parse AI-generated content into individual sections
-        logger.info(`About to parse content into sections for project ${project.id}`);
-        await createReportSectionsFromContent(project.id, result.content, result.outline);
-        logger.info(`Finished parsing content into sections for project ${project.id}`);
+        // Parse AI-generated LaTeX content into individual sections
+        logger.info(`About to parse LaTeX content into sections for project ${project.id}`);
+        await createReportSectionsFromLatexContent(project.id, result.content);
+        logger.info(`Finished parsing LaTeX content into sections for project ${project.id}`);
 
         // Generate PDF using new agent system ONLY
         let pdfPath: string | undefined = undefined;
@@ -572,107 +665,56 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res):
   }
 });
 
-// Helper function to parse AI-generated content and create individual report sections
-async function createReportSectionsFromContent(
+// Helper function to parse AI-generated LaTeX content and create individual report sections
+async function createReportSectionsFromLatexContent(
   projectId: string, 
-  content: string, 
-  outline: any
+  latexContent: string
 ): Promise<void> {
   try {
-    logger.info(`Creating sections for project ${projectId}, content length: ${content.length}, outline sections: ${outline.sections?.length || 0}`);
-    // Parse the markdown content by section headers
-    const sections = parseContentIntoSections(content, outline.sections);
-    logger.info(`Parsed ${sections.length} sections from content`);
+    logger.info(`Creating sections for project ${projectId}, LaTeX content length: ${latexContent.length}`);
+    
+    // Check if sections already exist for this project
+    const existingSections = await prisma.reportSection.findMany({
+      where: { projectId }
+    });
+    
+    if (existingSections.length > 0) {
+      logger.info(`Sections already exist for project ${projectId}, skipping creation`);
+      return;
+    }
+    
+    // Parse the LaTeX content by \section{} commands
+    const sections = parseLatexIntoSections(latexContent);
+    logger.info(`Parsed ${sections.length} sections from LaTeX content`);
     
     // Create report sections in database
     if (sections.length > 0) {
       await prisma.reportSection.createMany({
-        data: sections.map((section, index) => ({
+        data: sections.map((section) => ({
           projectId,
-          order: index + 1,
+          order: section.order,
           title: section.title,
-          type: mapSectionTypeFromTitle(section.title),
+          type: section.type,
           content: section.content,
           metadata: {
             generatedByAI: true,
+            isLatex: true,
+            sectionId: section.id,
             wordCount: section.content.split(/\s+/).length,
             createdAt: new Date().toISOString()
           }
         }))
       });
       
-      logger.info(`Created ${sections.length} report sections for project ${projectId}`);
+      logger.info(`Created ${sections.length} LaTeX report sections for project ${projectId}`);
     }
   } catch (error) {
-    logger.error('Failed to create report sections from content:', error);
+    logger.error('Failed to create report sections from LaTeX content:', error);
     // Don't throw - this shouldn't fail the entire generation
   }
 }
 
-// Parse markdown content into individual sections
-function parseContentIntoSections(content: string, outlineSections: any[]): Array<{title: string, content: string}> {
-  const sections: Array<{title: string, content: string}> = [];
-  
-  // Split content by section headers (## Section Title)
-  const sectionParts = content.split(/^## /m).filter(part => part.trim());
-  
-  // Map outline sections to ensure we have the correct titles
-  const outlineTitles = outlineSections.map(section => section.title);
-  
-  sectionParts.forEach(part => {
-    const lines = part.trim().split('\n');
-    if (lines.length === 0) return;
-    
-    const title = lines[0].trim();
-    const sectionContent = lines.slice(1).join('\n').trim();
-    
-    // Only include sections that match our outline or are standard sections
-    if (outlineTitles.includes(title) || isStandardSection(title)) {
-      sections.push({
-        title,
-        content: sectionContent
-      });
-    }
-  });
-  
-  // If no sections found, try to create basic sections from outline
-  if (sections.length === 0 && outlineSections.length > 0) {
-    // Create basic sections with placeholder content
-    outlineSections.forEach(section => {
-      sections.push({
-        title: section.title,
-        content: `### ${section.title}\n\nContent for ${section.title} section. This section covers the key aspects and analysis related to the research topic.\n\n${section.keyPoints ? section.keyPoints.map((point: string) => `- ${point}`).join('\n') : ''}`
-      });
-    });
-  }
-  
-  return sections;
-}
-
-// Map section titles to report section types
-function mapSectionTypeFromTitle(title: string): 'ABSTRACT' | 'INTRODUCTION' | 'CONCLUSION' | 'REFERENCES' | 'TEXT' {
-  const lowerTitle = title.toLowerCase();
-  
-  if (lowerTitle.includes('abstract')) return 'ABSTRACT';
-  if (lowerTitle.includes('introduction')) return 'INTRODUCTION';
-  if (lowerTitle.includes('conclusion')) return 'CONCLUSION';
-  if (lowerTitle.includes('reference') || lowerTitle.includes('bibliograph') || lowerTitle.includes('citation')) return 'REFERENCES';
-  
-  return 'TEXT'; // Default type
-}
-
-// Check if title represents a standard academic section
-function isStandardSection(title: string): boolean {
-  const standardSections = [
-    'abstract', 'introduction', 'literature review', 'methodology', 'methods',
-    'results', 'findings', 'discussion', 'analysis', 'conclusion', 'references',
-    'bibliography', 'appendix'
-  ];
-  
-  return standardSections.some(section => 
-    title.toLowerCase().includes(section)
-  );
-}
+// Note: Old markdown parsing functions removed - now using LaTeX-only approach
 
 // Enhanced PDF generation using LaTeX Formatter and Compilation Agents
 async function generatePDFFromSections(

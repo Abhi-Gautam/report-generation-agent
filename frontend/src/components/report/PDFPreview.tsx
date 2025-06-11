@@ -1,14 +1,22 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, RotateCw, Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 
-// Set up PDF.js worker
-if (typeof window !== 'undefined') {
-  GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
-}
+// PDF.js setup with version 5.3.31
+const setupPDFJS = async () => {
+  if (typeof window === 'undefined') return null;
+  
+  // Import pdfjs-dist version 5.3.31
+  const pdfjs = await import('pdfjs-dist');
+  
+  // Use the exact worker version that matches
+  pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.3.31/build/pdf.worker.min.mjs';
+  
+  console.log(`PDF.js version: ${pdfjs.version}, Worker: 5.3.31`);
+  return pdfjs;
+};
 
 interface PDFPreviewProps {
   reportId: string;
@@ -16,11 +24,11 @@ interface PDFPreviewProps {
 
 export function PDFPreview({ reportId }: PDFPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const renderTaskRef = useRef<any>(null);
   const [pdf, setPdf] = useState<any>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1.2);
-  const [rotation, setRotation] = useState(0);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [scale, setScale] = useState<number>(1.2);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
@@ -35,62 +43,52 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
         throw new Error('Authentication required');
       }
 
-      // First, trigger compilation
-      const compileResponse = await fetch(`/api/sections/${reportId}/compile`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ format: 'pdf' })
-      });
-
-      if (!compileResponse.ok) {
-        throw new Error('Failed to compile PDF');
-      }
-
-      // Then load the PDF
-      const pdfResponse = await fetch(`/api/sections/${reportId}/download/pdf`, {
+      console.log('Checking for existing PDF...');
+      
+      // FIRST: Check if PDF already exists - DO NOT trigger research
+      const pdfResponse = await fetch(`/api/projects/${reportId}/download?view=true`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
-      if (!pdfResponse.ok) {
-        throw new Error('Failed to load PDF');
-      }
 
-      const pdfArrayBuffer = await pdfResponse.arrayBuffer();
-      const pdfDoc = await getDocument({ data: pdfArrayBuffer }).promise;
+      if (pdfResponse.ok) {
+        console.log('Found existing PDF, loading...');
+        const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+        
+        // Initialize PDF.js and load the document
+        const pdfjs = await setupPDFJS();
+        if (!pdfjs) {
+          throw new Error('Failed to initialize PDF.js');
+        }
+
+        const pdfDoc = await pdfjs.getDocument({ data: pdfArrayBuffer }).promise;
+        setPdf(pdfDoc);
+        setNumPages(pdfDoc.numPages);
+        setPageNumber(1);
+        
+        console.log(`PDF loaded successfully with ${pdfDoc.numPages} pages`);
+        
+        // Force initial render of first page to avoid upside down issue
+        setTimeout(() => {
+          if (canvasRef.current && pdfDoc) {
+            renderPageDirect(pdfDoc, 1);
+          }
+        }, 100);
+      } else if (pdfResponse.status === 404) {
+        // PDF doesn't exist - show message instead of auto-generating
+        setError('No PDF available. Please generate the report first from the edit page.');
+      } else {
+        throw new Error(`Failed to load PDF: ${pdfResponse.status} ${pdfResponse.statusText}`);
+      }
       
-      setPdf(pdfDoc);
-      setTotalPages(pdfDoc.numPages);
-      setCurrentPage(1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load PDF');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load PDF';
+      console.error('PDF loading error:', err);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const renderPage = async (pageNum: number) => {
-    if (!pdf || !canvasRef.current) return;
-
-    const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale, rotation });
-    
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport
-    };
-
-    await page.render(renderContext).promise;
   };
 
   useEffect(() => {
@@ -98,27 +96,96 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
   }, [reportId]);
 
   useEffect(() => {
-    if (pdf && currentPage) {
-      renderPage(currentPage);
+    if (pdf && pageNumber) {
+      renderPage(pageNumber);
     }
-  }, [pdf, currentPage, scale, rotation]);
+  }, [pdf, pageNumber, scale]);
 
-  const handleZoomIn = () => {
-    setScale(prev => Math.min(prev + 0.2, 3));
+  const renderPageDirect = async (pdfDoc: any, pageNum: number) => {
+    if (!canvasRef.current) return;
+
+    try {
+      // Cancel previous render task
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+      }
+
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ 
+        scale,
+        rotation: 0 // Ensure no rotation on first render
+      });
+      
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      // Clear canvas completely
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Set canvas dimensions
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      };
+
+      // Store render task for cancellation
+      renderTaskRef.current = page.render(renderContext);
+      await renderTaskRef.current.promise;
+      renderTaskRef.current = null;
+      
+    } catch (error) {
+      if (error.name === 'RenderingCancelledException') {
+        console.log('Direct rendering was cancelled');
+      } else {
+        console.error('Error in direct rendering:', error);
+      }
+    }
   };
 
-  const handleZoomOut = () => {
-    setScale(prev => Math.max(prev - 0.2, 0.5));
-  };
-
-  const handleRotate = () => {
-    setRotation(prev => (prev + 90) % 360);
+  const renderPage = async (pageNum: number) => {
+    if (!pdf || !canvasRef.current) return;
+    await renderPageDirect(pdf, pageNum);
   };
 
   const handleRecompile = async () => {
     setIsCompiling(true);
-    await loadPDF();
-    setIsCompiling(false);
+    setPdf(null);
+    setNumPages(0);
+    setPageNumber(1);
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Trigger LaTeX recompilation only (not research)
+      const compileResponse = await fetch(`/api/projects/${reportId}/compile`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!compileResponse.ok) {
+        throw new Error('Failed to start recompilation');
+      }
+
+      // Wait a bit and then reload the PDF
+      setTimeout(() => {
+        loadPDF();
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Recompilation failed:', error);
+      setError('Failed to recompile PDF');
+    } finally {
+      setIsCompiling(false);
+    }
   };
 
   const handleDownload = async () => {
@@ -128,7 +195,7 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
         throw new Error('Authentication required');
       }
 
-      const response = await fetch(`/api/sections/${reportId}/download/pdf`, {
+      const response = await fetch(`/api/projects/${reportId}/download`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -150,7 +217,7 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Compiling PDF...</p>
+          <p className="text-gray-600">Loading PDF...</p>
         </div>
       </div>
     );
@@ -170,47 +237,62 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
     );
   }
 
+  const handlePrevPage = () => {
+    setPageNumber(prev => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setPageNumber(prev => Math.min(prev + 1, numPages));
+  };
+
+  const handleZoomIn = () => {
+    setScale(prev => Math.min(prev + 0.3, 3.0));
+  };
+
+  const handleZoomOut = () => {
+    setScale(prev => Math.max(prev - 0.3, 0.5));
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between p-4 border-b bg-white">
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleZoomOut}>
+          <Button size="sm" variant="outline" onClick={handleZoomOut} disabled={!pdf}>
             <ZoomOut className="w-4 h-4" />
           </Button>
           <span className="text-sm font-medium px-2">
             {Math.round(scale * 100)}%
           </span>
-          <Button size="sm" variant="outline" onClick={handleZoomIn}>
+          <Button size="sm" variant="outline" onClick={handleZoomIn} disabled={!pdf}>
             <ZoomIn className="w-4 h-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleRotate}>
-            <RotateCw className="w-4 h-4" />
           </Button>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </span>
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage <= 1}
-            >
-              Previous
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage >= totalPages}
-            >
-              Next
-            </Button>
-          </div>
+          {numPages > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePrevPage}
+                disabled={pageNumber <= 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-gray-600 px-2">
+                Page {pageNumber} of {numPages}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleNextPage}
+                disabled={pageNumber >= numPages}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -221,7 +303,7 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
             disabled={isCompiling}
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${isCompiling ? 'animate-spin' : ''}`} />
-            {isCompiling ? 'Compiling...' : 'Recompile'}
+            {isCompiling ? 'Recompiling...' : 'Recompile'}
           </Button>
           <Button size="sm" onClick={handleDownload}>
             <Download className="w-4 h-4 mr-1" />
@@ -230,17 +312,20 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
         </div>
       </div>
 
-      {/* PDF Canvas */}
-      <div className="flex-1 overflow-auto bg-gray-200 p-4">
-        <div className="flex justify-center">
+      {/* PDF Viewer */}
+      <div className="flex-1 bg-gray-100 flex items-center justify-center overflow-auto p-4">
+        {pdf ? (
           <div className="bg-white shadow-lg">
             <canvas
               ref={canvasRef}
               className="block max-w-full h-auto"
-              style={{ transform: `rotate(${rotation}deg)` }}
             />
           </div>
-        </div>
+        ) : (
+          <div className="text-center">
+            <p className="text-gray-500">No PDF available</p>
+          </div>
+        )}
       </div>
     </div>
   );

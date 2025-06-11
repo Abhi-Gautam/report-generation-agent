@@ -59,6 +59,71 @@ export default function EditReportPage() {
     await reorderSections(sectionOrders);
   };
 
+  const handleSave = async () => {
+    if (!selectedSection || !hasUnsavedChanges) return;
+    
+    try {
+      await updateSection({ 
+        sectionId: selectedSection.id, 
+        updates: { content: selectedSection.content } 
+      });
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Failed to save section:', error);
+      alert('Failed to save changes. Please try again.');
+    }
+  };
+
+  const handleExport = async () => {
+    const exportType = prompt('Choose export format:\n1. PDF\n2. LaTeX\n\nEnter 1 or 2:');
+    
+    if (!exportType || !['1', '2'].includes(exportType)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        alert('Authentication required');
+        return;
+      }
+
+      let url = '';
+      let filename = '';
+      
+      if (exportType === '1') {
+        // PDF export
+        url = `/api/projects/${reportId}/download`;
+        filename = `${report?.title || 'report'}.pdf`;
+      } else {
+        // LaTeX export
+        url = `/api/sections/${reportId}/download/latex`;
+        filename = `${report?.title || 'report'}.tex`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export document');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Failed to export:', error);
+      alert('Failed to export document. Please try again.');
+    }
+  };
+
   if (isLoadingReport || isLoadingSections) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -98,12 +163,17 @@ export default function EditReportPage() {
             </Button>
           </div>
           
-          <Button size="sm" variant="outline">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleSave}
+            disabled={!hasUnsavedChanges || isUpdating}
+          >
             <Save className="w-4 h-4 mr-1" />
-            {hasUnsavedChanges ? 'Save*' : 'Saved'}
+            {isUpdating ? 'Saving...' : hasUnsavedChanges ? 'Save*' : 'Saved'}
           </Button>
           
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-1" />
             Export
           </Button>

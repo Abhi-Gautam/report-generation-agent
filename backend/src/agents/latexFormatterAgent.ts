@@ -112,11 +112,10 @@ export class LaTeXFormatterAgent extends BaseAgent {
       const mainContent = await this.formatMainSections(input.sections, input.metadata);
       this.updateProgress(80, 'Formatted main content sections');
 
-      // Step 7: Generate bibliography (if needed)
-      const bibliography = input.formatting?.includeBibliography && input.metadata?.bibliography
-        ? await this.generateBibliography(input.metadata.bibliography, input.metadata.citationStyle)
-        : undefined;
-      this.updateProgress(90, 'Generated bibliography');
+      // Step 7: Generate bibliography (TEMPORARILY DISABLED)
+      // Bibliography disabled until proper source pipeline is implemented
+      const bibliography = undefined; // Temporarily disabled
+      this.updateProgress(90, 'Skipped bibliography generation (temporarily disabled)');
 
       // Step 8: Assemble final document
       const documentParts: {
@@ -218,11 +217,11 @@ export class LaTeXFormatterAgent extends BaseAgent {
         break;
     }
 
-    // Basic citation style
-    preamble += `% Basic citations
-\\bibliographystyle{plain}
-
-`;
+    // TEMPORARILY DISABLED: Basic citation style
+    // preamble += `% Basic citations
+    // \\bibliographystyle{plain}
+    // 
+    // `;
 
     // Geometry and formatting
     preamble += `% Page geometry and formatting
@@ -435,14 +434,16 @@ Return only the LaTeX-formatted content, no explanations.
   }
 
   private formatCitations(content: string): string {
-    // Convert various citation formats to LaTeX
+    // TEMPORARILY DISABLED: Convert various citation formats to LaTeX
+    // Citations are disabled until proper source pipeline is implemented
     let formatted = content;
 
+    // TODO: Re-enable when source list and citation engine is ready
     // (Author, Year) -> \citep{key}
-    formatted = formatted.replace(/\(([^,]+),\s*(\d{4})\)/g, '\\citep{$1$2}');
+    // formatted = formatted.replace(/\(([^,]+),\s*(\d{4})\)/g, '\\citep{$1$2}');
     
     // [1] -> \cite{ref1}
-    formatted = formatted.replace(/\[(\d+)\]/g, '\\cite{ref$1}');
+    // formatted = formatted.replace(/\[(\d+)\]/g, '\\cite{ref$1}');
 
     return formatted;
   }
@@ -490,43 +491,45 @@ Return only the LaTeX-formatted content, no explanations.
     return formatted;
   }
 
-  private async generateBibliography(bibliography: any[], citationStyle?: string): Promise<string> {
-    if (!bibliography || bibliography.length === 0) return '';
+  // TEMPORARILY DISABLED - Remove unused method to fix TS error
+  // private async generateBibliography(bibliography: any[], citationStyle?: string): Promise<string> {
+  //   if (!bibliography || bibliography.length === 0) return '';
 
-    let bibContent = `% Bibliography
-\\newpage
-\\bibliographystyle{${this.getCitationStyle(citationStyle)}}
-\\bibliography{references}
+  //   let bibContent = `% Bibliography
+  // \\newpage
+  // \\bibliographystyle{${this.getCitationStyle(citationStyle)}}
+  // \\bibliography{references}
 
-% References (manual)
-\\begin{thebibliography}{${bibliography.length}}
+  // % References (manual)
+  // \\begin{thebibliography}{${bibliography.length}}
 
-`;
+  // `;
 
-    bibliography.forEach((ref, index) => {
-      bibContent += `\\bibitem{ref${index + 1}} ${this.formatReference(ref, citationStyle)}
+  //   bibliography.forEach((ref, index) => {
+  //     bibContent += `\\bibitem{ref${index + 1}} ${this.formatReference(ref, citationStyle)}
 
-`;
-    });
+  // `;
+  //   });
 
-    bibContent += '\\end{thebibliography}\n\n';
+  //   bibContent += '\\end{thebibliography}\n\n';
 
-    return bibContent;
-  }
+  //   return bibContent;
+  // }
 
-  private formatReference(ref: any, citationStyle?: string): string {
-    // Basic reference formatting - can be enhanced based on citation style
-    const style = citationStyle || 'APA';
+  // TEMPORARILY DISABLED - Remove unused method to fix TS error
+  // private formatReference(ref: any, citationStyle?: string): string {
+  //   // Basic reference formatting - can be enhanced based on citation style
+  //   const style = citationStyle || 'APA';
     
-    switch (style) {
-      case 'APA':
-        return `${ref.author || 'Unknown'}. (${ref.year || 'n.d.'}). ${ref.title}. ${ref.source || ref.url}`;
-      case 'MLA':
-        return `${ref.author || 'Unknown'}. "${ref.title}." ${ref.source || ref.url}, ${ref.year || 'n.d.'}.`;
-      default:
-        return `${ref.author || 'Unknown'}. ${ref.title}. ${ref.source || ref.url}. ${ref.year || 'n.d.'}.`;
-    }
-  }
+  //   switch (style) {
+  //     case 'APA':
+  //       return `${ref.author || 'Unknown'}. (${ref.year || 'n.d.'}). ${ref.title}. ${ref.source || ref.url}`;
+  //     case 'MLA':
+  //       return `${ref.author || 'Unknown'}. "${ref.title}." ${ref.source || ref.url}, ${ref.year || 'n.d.'}.`;
+  //     default:
+  //       return `${ref.author || 'Unknown'}. ${ref.title}. ${ref.source || ref.url}. ${ref.year || 'n.d.'}.`;
+  //   }
+  // }
 
   private async assembleDocument(
     parts: {
@@ -637,16 +640,17 @@ Return only the LaTeX-formatted content, no explanations.
       .replace(/^_|_$/g, '');
   }
 
-  private getCitationStyle(style?: string): string {
-    // Only use basic citation styles available in Alpine texlive
-    switch (style) {
-      case 'APA': return 'plain'; // fallback to plain since apalike might not be available
-      case 'MLA': return 'plain';
-      case 'CHICAGO': return 'plain';
-      case 'IEEE': return 'plain';
-      default: return 'plain';
-    }
-  }
+  // TEMPORARILY DISABLED - Remove unused method to fix TS error
+  // private getCitationStyle(style?: string): string {
+  //   // Only use basic citation styles available in Alpine texlive
+  //   switch (style) {
+  //     case 'APA': return 'plain'; // fallback to plain since apalike might not be available
+  //     case 'MLA': return 'plain';
+  //     case 'CHICAGO': return 'plain';
+  //     case 'IEEE': return 'plain';
+  //     default: return 'plain';
+  //   }
+  // }
 
   private escapeLatex(text: string): string {
     return text

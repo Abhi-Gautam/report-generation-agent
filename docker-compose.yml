@@ -1,3 +1,8 @@
+# Enable Docker Bake for better build performance
+# Set COMPOSE_BAKE=true to delegate builds to bake
+x-bake-config: &bake-config
+  COMPOSE_BAKE: ${COMPOSE_BAKE:-false}
+
 services:
   # Frontend - Next.js
   frontend:
@@ -11,6 +16,7 @@ services:
     - NEXT_PUBLIC_API_URL=http://localhost:4000
     - NEXT_PUBLIC_WS_URL=ws://localhost:4000
     - INTERNAL_API_URL=http://backend:4000
+    - COMPOSE_BAKE=${COMPOSE_BAKE:-false}
     volumes:
       # Mount source code for hot reload
       - ./frontend/src:/app/src
@@ -39,6 +45,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - AUTO_SEED=${AUTO_SEED:-false}
+      - COMPOSE_BAKE=${COMPOSE_BAKE:-false}
     volumes:
       # Mount source code for hot reload
       - ./backend/src:/app/src

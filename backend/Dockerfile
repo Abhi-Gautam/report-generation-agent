@@ -10,9 +10,7 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    texlive \
-    texlive-luatex \
-    texlive-xetex \
+    texlive-full \
     py3-pygments \
     zip \
     unzip \

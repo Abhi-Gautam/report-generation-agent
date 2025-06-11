@@ -180,7 +180,7 @@ build/
 dist/
 
 # Lock files (uncomment if using npm)
-# package-lock.json
+package-lock.json
 
 # Prisma
 /prisma/migrations/

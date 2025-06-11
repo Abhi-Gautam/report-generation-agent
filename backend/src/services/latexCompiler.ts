@@ -351,7 +351,7 @@ export class LaTeXCompiler {
 \\usepackage{array}
 \\usepackage{longtable}
 \\usepackage{url}
-\\usepackage{natbib}
+% TEMPORARILY DISABLED: \\usepackage{natbib}
 
 \\geometry{margin=1in}
 \\pagestyle{fancy}

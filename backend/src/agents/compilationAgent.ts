@@ -401,286 +401,38 @@ export class CompilationAgent extends BaseAgent {
     errors: LaTeXError[],
     attemptNumber: number
   ): Promise<string> {
-    let fixedContent = latexContent;
-    const appliedFixes: string[] = [];
-
-    this.logger.info(`Applying automatic fixes for ${errors.length} total errors on attempt ${attemptNumber}`);
+    this.logger.info(`Applying AI-based fixes for ${errors.length} total errors on attempt ${attemptNumber}`);
     
     // Log each error for debugging
     errors.forEach((error, index) => {
       this.logger.info(`Error ${index + 1}: "${error.message}" (severity: ${error.severity}, fixable: ${error.fixable}, line: ${error.line || 'unknown'})`);
     });
 
-    // Apply rule-based fixes first
-    const fixableErrors = errors.filter(e => e.fixable && e.severity !== 'LOW');
-    this.logger.info(`Found ${fixableErrors.length} fixable errors with severity !== 'LOW'`);
-    
-    for (const error of fixableErrors) {
-      const ruleBasedFix = this.applyRuleBasedFix(fixedContent, error);
-      if (ruleBasedFix.fixed && ruleBasedFix.content !== fixedContent) {
-        fixedContent = ruleBasedFix.content;
-        appliedFixes.push(ruleBasedFix.description);
-      }
+    // Filter for fixable errors
+    const fixableErrors = errors.filter(e => e.fixable);
+    this.logger.info(`Found ${fixableErrors.length} fixable errors to send to LLM`);
+
+    if (fixableErrors.length === 0) {
+      this.logger.info('No fixable errors found, returning original content');
+      return latexContent;
     }
 
-    // Apply AI-based fixes if rule-based fixes didn't work or for complex errors
-    const remainingErrors = errors.filter(e => 
-      e.fixable && 
-      (e.severity === 'HIGH' || e.severity === 'CRITICAL')
-    );
-
-    // Use AI if we have serious errors and either no rule fixes applied or it's early attempt
-    if (remainingErrors.length > 0 && attemptNumber <= 3) {
-      this.logger.info(`Attempting AI-based fix for ${remainingErrors.length} errors (attempt ${attemptNumber})`);
-      try {
-        const aiFix = await this.applyAIBasedFix(fixedContent, remainingErrors);
-        if (aiFix.content !== fixedContent) {
-          fixedContent = aiFix.content;
-          appliedFixes.push(...aiFix.appliedFixes);
-          this.logger.info('AI successfully applied fixes to LaTeX document');
-        } else {
-          this.logger.warn('AI did not modify the LaTeX document');
-        }
-      } catch (aiError) {
-        this.logger.error('AI-based fix failed:', aiError);
-      }
-    }
-
-    this.logger.info(`Applied ${appliedFixes.length} fixes: ${appliedFixes.join(', ')}`);
-    return fixedContent;
-  }
-
-  private applyRuleBasedFix(content: string, error: LaTeXError): { fixed: boolean; content: string; description: string } {
-    let fixedContent = content;
-    let description = '';
-    let fixed = false;
-
-    const errorMessage = error.message.toLowerCase();
-    this.logger.info(`Attempting rule-based fix for error: "${error.message}" (severity: ${error.severity})`);
-
-    // Missing image file fixes
-    if (errorMessage.includes('file') && errorMessage.includes('not found') && (errorMessage.includes('.png') || errorMessage.includes('.jpg') || errorMessage.includes('.jpeg') || errorMessage.includes('.pdf'))) {
-      this.logger.info('Detected missing image file, removing includegraphics commands...');
+    // Apply AI-based fixes for all fixable errors
+    try {
+      this.logger.info(`Sending ${fixableErrors.length} errors to AI for fixing (attempt ${attemptNumber})`);
+      const aiFix = await this.applyAIBasedFix(latexContent, fixableErrors);
       
-      // Extract the filename from the error message
-      const filenameMatch = errorMessage.match(/file `([^']+)' not found/i) || errorMessage.match(/`([^`]+\.(png|jpg|jpeg|pdf))/i);
-      
-      if (filenameMatch) {
-        const filename = filenameMatch[1];
-        this.logger.info(`Removing references to missing image: ${filename}`);
-        
-        // Remove includegraphics commands that reference this file
-        const imageRegex = new RegExp(`\\\\includegraphics(?:\\[.*?\\])?\\{[^}]*${filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^}]*\\}`, 'g');
-        fixedContent = content.replace(imageRegex, '% Image removed: missing file');
-        
-        // Also remove figure environments that only contain this image
-        const figureRegex = new RegExp(`\\\\begin\\{figure\\}[^]*?\\\\includegraphics(?:\\[.*?\\])?\\{[^}]*${filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^}]*\\}[^]*?\\\\end\\{figure\\}`, 'g');
-        fixedContent = fixedContent.replace(figureRegex, '% Figure with missing image removed');
-        
-        if (fixedContent !== content) {
-          description = `Removed references to missing image file: ${filename}`;
-          fixed = true;
-        }
-      }
-    }
-    
-    // Missing package fixes - handle both undefined commands and missing .sty files
-    else if (errorMessage.includes('undefined control sequence') || errorMessage.includes('file') && errorMessage.includes('.sty') && errorMessage.includes('not found')) {
-      
-      // Handle missing .sty files specifically
-      const styMatch = error.message.match(/File `(.+?)\.sty' not found/);
-      if (styMatch) {
-        const missingPackage = styMatch[1];
-        this.logger.info(`Attempting to fix missing package: ${missingPackage}`);
-        
-        // Check if we can remove this package safely
-        const packageRemoval = this.shouldRemovePackage(missingPackage);
-        if (packageRemoval.remove) {
-          // Remove the problematic usepackage line
-          const packageRegex = new RegExp(`\\\\usepackage(?:\\[[^\\]]*\\])?\\{${missingPackage}\\}\\s*`, 'g');
-          fixedContent = fixedContent.replace(packageRegex, '');
-          description = `Removed unavailable package: ${missingPackage} - ${packageRemoval.reason}`;
-          fixed = true;
-        } else {
-          // Try to substitute with alternative package
-          const alternative = this.getPackageAlternative(missingPackage);
-          if (alternative) {
-            const packageRegex = new RegExp(`\\\\usepackage(?:\\[[^\\]]*\\])?\\{${missingPackage}\\}`, 'g');
-            fixedContent = fixedContent.replace(packageRegex, `\\usepackage{${alternative}}`);
-            description = `Replaced package ${missingPackage} with ${alternative}`;
-            fixed = true;
-          }
-        }
-      }
-      
-      // Handle undefined control sequences
-      const commandMatch = error.message.match(/\\(\w+)/);
-      if (commandMatch && !fixed) {
-        const command = commandMatch[1];
-        
-        // Special handling for lstlisting environment
-        if (command === 'lstlisting' || command === 'begin' && content.includes('lstlisting')) {
-          fixedContent = fixedContent.replace(/\\begin\{lstlisting\}.*?\\end\{lstlisting\}/gs, (match) => {
-            const codeContent = match.replace(/\\begin\{lstlisting\}[^\n]*\n/, '').replace(/\n\\end\{lstlisting\}/, '');
-            return `\\begin{verbatim}\n${codeContent}\n\\end{verbatim}`;
-          });
-          description = 'Replaced lstlisting environment with verbatim';
-          fixed = true;
-        } else {
-          // Check for commands that need unavailable packages and substitute them
-          const substitution = this.getCommandSubstitution(command);
-          if (substitution) {
-            fixedContent = fixedContent.replace(new RegExp(`\\\\${command}\\b`, 'g'), substitution);
-            description = `Substituted unavailable command \\${command} with ${substitution}`;
-            fixed = true;
-          } else {
-            // Try to add package if available
-            const packageFix = this.getPackageForCommand(command);
-            if (packageFix && !content.includes(`\\usepackage{${packageFix}}`)) {
-              // Add package after last usepackage line
-              const lastUsepackageIndex = content.lastIndexOf('\\usepackage');
-              if (lastUsepackageIndex !== -1) {
-                const nextLineIndex = content.indexOf('\n', lastUsepackageIndex);
-                fixedContent = content.slice(0, nextLineIndex) + 
-                              `\n\\usepackage{${packageFix}}` + 
-                              content.slice(nextLineIndex);
-                description = `Added missing package: ${packageFix}`;
-                fixed = true;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Preamble errors - multiple \documentclass
-    if (errorMessage.includes('can be used only in preamble')) {
-      this.logger.info('Detected preamble error, checking for duplicate \\documentclass declarations');
-      const documentclassMatches = content.match(/\\documentclass/g);
-      this.logger.info(`Found ${documentclassMatches?.length || 0} \\documentclass occurrences in content`);
-      
-      if (documentclassMatches && documentclassMatches.length > 1) {
-        this.logger.info('Multiple \\documentclass found, removing duplicates...');
-        // Remove duplicate \documentclass declarations
-        const lines = content.split('\n');
-        let foundFirstDocumentclass = false;
-        const cleanedLines = lines.filter(line => {
-          if (line.includes('\\documentclass')) {
-            if (foundFirstDocumentclass) {
-              this.logger.info(`Removing duplicate \\documentclass line: ${line.trim()}`);
-              return false; // Remove subsequent \documentclass lines
-            } else {
-              this.logger.info(`Keeping first \\documentclass line: ${line.trim()}`);
-              foundFirstDocumentclass = true;
-              return true; // Keep the first one
-            }
-          }
-          return true;
-        });
-        fixedContent = cleanedLines.join('\n');
-        description = 'Removed duplicate \\documentclass declarations';
-        fixed = true;
-        this.logger.info('Successfully removed duplicate \\documentclass declarations');
+      if (aiFix.content !== latexContent) {
+        this.logger.info(`AI successfully applied ${aiFix.appliedFixes.length} fixes to LaTeX document`);
+        return aiFix.content;
       } else {
-        this.logger.warn('Preamble error detected but no duplicate \\documentclass found');
+        this.logger.warn('AI did not modify the LaTeX document');
+        return latexContent;
       }
+    } catch (aiError) {
+      this.logger.error('AI-based fix failed:', aiError);
+      return latexContent;
     }
-
-    // Missing $ fixes
-    if (errorMessage.includes('missing $') || errorMessage.includes('math mode')) {
-      // Simple heuristic: wrap standalone equations
-      fixedContent = fixedContent.replace(/([^$])(\\alpha|\\beta|\\gamma|\\sum|\\int|\\frac{[^}]+}{[^}]+})([^$])/g, '$1$$$2$$$3');
-      if (fixedContent !== content) {
-        description = 'Added missing math mode delimiters';
-        fixed = true;
-      }
-    }
-
-    // Missing } fixes
-    if (errorMessage.includes('missing }')) {
-      const openBraces = (content.match(/\{/g) || []).length;
-      const closeBraces = (content.match(/\}/g) || []).length;
-      if (openBraces > closeBraces) {
-        fixedContent = content + '}'.repeat(openBraces - closeBraces);
-        description = `Added ${openBraces - closeBraces} missing closing braces`;
-        fixed = true;
-      }
-    }
-
-    return { fixed, content: fixedContent, description };
-  }
-
-  private getPackageForCommand(command: string): string | null {
-    const commandPackageMap: { [key: string]: string } = {
-      'includegraphics': 'graphicx',
-      'href': 'hyperref',
-      'url': 'url',
-      'color': 'xcolor',
-      'textcolor': 'xcolor',
-      'frac': 'amsmath',
-      'sum': 'amsmath',
-      'int': 'amsmath',
-      'alpha': 'amsmath',
-      'beta': 'amsmath',
-      'gamma': 'amsmath',
-      'cite': 'natbib',
-      'citep': 'natbib',
-      'citet': 'natbib',
-      'lstlisting': 'listings',
-      'toprule': 'booktabs',
-      'midrule': 'booktabs',
-      'bottomrule': 'booktabs'
-    };
-
-    return commandPackageMap[command] || null;
-  }
-
-  private getCommandSubstitution(command: string): string | null {
-    // Map commands from unavailable packages to basic LaTeX equivalents
-    const substitutionMap: { [key: string]: string } = {
-      'setstretch': '', // Remove line spacing commands
-      'toprule': '\\hline',
-      'midrule': '\\hline', 
-      'bottomrule': '\\hline',
-    };
-
-    return substitutionMap[command] || null;
-  }
-
-  private shouldRemovePackage(packageName: string): { remove: boolean; reason: string } {
-    // Packages that are commonly missing in Alpine and can be safely removed
-    const removablePackages: { [key: string]: string } = {
-      'infwarerr': 'dependency package not available in Alpine texlive',
-      'kvoptions': 'dependency package not available in Alpine texlive', 
-      'ltxcmds': 'dependency package not available in Alpine texlive',
-      'kvdefinekeys': 'dependency package not available in Alpine texlive',
-      'kvsetkeys': 'dependency package not available in Alpine texlive',
-      'etexcmds': 'dependency package not available in Alpine texlive',
-      'letltxmacro': 'dependency package not available in Alpine texlive',
-      'pdftexcmds': 'dependency package not available in Alpine texlive',
-      'auxhook': 'dependency package not available in Alpine texlive',
-      'nameref': 'dependency package not available in Alpine texlive',
-      'refcount': 'dependency package not available in Alpine texlive',
-      'gettitlestring': 'dependency package not available in Alpine texlive'
-    };
-
-    if (removablePackages[packageName]) {
-      return { remove: true, reason: removablePackages[packageName] };
-    }
-
-    return { remove: false, reason: 'Package may be needed' };
-  }
-
-  private getPackageAlternative(packageName: string): string | null {
-    // Map problematic packages to available alternatives
-    const alternatives: { [key: string]: string } = {
-      'hyperref': '', // Remove hyperref entirely since it has too many dependencies
-      'natbib': '', // Remove natbib, use basic citations
-      'booktabs': '', // Remove booktabs, use basic tables
-      'listings': '' // Remove listings, use verbatim
-    };
-
-    return alternatives[packageName] || null;
   }
 
   private async applyAIBasedFix(content: string, errors: LaTeXError[]): Promise<{ content: string; appliedFixes: string[] }> {
@@ -689,30 +441,52 @@ export class CompilationAgent extends BaseAgent {
     const errorDescriptions = errors.map(e => `- ${e.message} (Line: ${e.line || 'unknown'})`).join('\n');
 
     const prompt = `
-Fix the following LaTeX compilation errors in this document for Alpine Linux texlive (limited package availability).
+You are a LaTeX expert. Fix ALL compilation errors in this document for Alpine Linux texlive.
 
-Errors to fix:
+COMPILATION ERRORS TO FIX:
 ${errorDescriptions}
 
-LaTeX document:
+LATEX DOCUMENT:
 ${content}
 
-IMPORTANT RULES for Alpine Linux compatibility:
-1. REMOVE these packages if present: hyperref, booktabs, listings, setspace, infwarerr, kvoptions, natbib
-2. Replace \\lstlisting with \\begin{verbatim}...\\end{verbatim}
-3. Replace \\toprule, \\midrule, \\bottomrule with \\hline
-4. Replace \\href{url}{text} with text (\\url{url})
-5. Only use basic packages: inputenc, fontenc, babel, amsmath, amssymb, amsfonts, graphicx, geometry, url
-6. Remove \\setstretch commands (not available)
-7. Fix syntax errors and brace mismatches
+COMPREHENSIVE FIXING RULES:
 
-CRITICAL: 
-- DO NOT add additional \\documentclass declarations
-- DO NOT create new document structure 
-- ONLY fix the errors in the existing document
-- Keep the existing preamble and document structure intact
+1. PACKAGE MANAGEMENT:
+   - REMOVE unavailable packages: hyperref, booktabs, listings, setspace, infwarerr, kvoptions, natbib, biblatex, xcolor, tikz, pgfplots, fontspec, microtype
+   - ONLY use these safe packages: inputenc, fontenc, babel, amsmath, amssymb, amsfonts, graphicx, geometry, url, cite, enumitem, array, longtable, caption, float, fancyhdr
 
-Return ONLY the complete corrected LaTeX document, no explanations or markdown formatting.
+2. COMMAND SUBSTITUTIONS:
+   - Replace \\lstlisting with \\begin{verbatim}...\\end{verbatim}
+   - Replace \\toprule, \\midrule, \\bottomrule with \\hline
+   - Replace \\href{url}{text} with "text (\\url{url})"
+   - Remove \\setstretch, \\singlespacing, \\doublespacing commands
+   - Replace \\textcolor{color}{text} with just text
+   - Remove \\hypersetup{} commands
+
+3. SPECIAL CHARACTER ESCAPING:
+   - Fix ALL unescaped special characters: # & % $ _ ^
+   - Examples: C# → C\\#, F# → F\\#, R&D → R\\&D, 95% → 95\\%, user_id → user\\_id, E=mc^2 → E=mc\\^2
+   - Be especially careful with programming languages, chemical formulas, and technical terms
+
+4. SYNTAX FIXES:
+   - Fix missing closing braces }
+   - Fix missing math mode delimiters $
+   - Remove duplicate \\documentclass declarations
+   - Fix malformed commands and environments
+   - Ensure proper nesting of environments
+
+5. IMAGE HANDLING:
+   - Remove \\includegraphics commands for missing image files
+   - Remove empty figure environments
+   - Comment out problematic graphics
+
+6. STRUCTURE INTEGRITY:
+   - DO NOT add extra \\documentclass
+   - DO NOT modify the document structure
+   - ONLY fix the specific errors
+   - Keep existing preamble intact
+
+ANALYZE each error message carefully and apply the appropriate fix. Return ONLY the corrected LaTeX document with NO explanations or markdown formatting.
 `;
 
     try {

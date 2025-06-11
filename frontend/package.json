@@ -48,7 +48,7 @@
     "use-debounce": "^10.0.0",
     "next-themes": "^0.3.0",
     "@monaco-editor/react": "^4.6.0",
-    "pdfjs-dist": "^4.0.379",
+    "pdfjs-dist": "^5.3.31",
     "chart.js": "^4.4.0",
     "react-chartjs-2": "^5.2.0",
     "@dnd-kit/core": "^6.1.0",

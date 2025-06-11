@@ -12,6 +12,37 @@ export default function PreviewReportPage() {
   const reportId = params.id as string;
   const { report, isLoading } = useReports(reportId);
 
+  const handleDownloadPDF = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        alert('Authentication required');
+        return;
+      }
+
+      const response = await fetch(`/api/projects/${reportId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download PDF');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${report?.title || 'report'}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      alert('Failed to download PDF. Please try again.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -23,7 +54,7 @@ export default function PreviewReportPage() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white">
+      <div className="flex items-center justify-between p-4 border-b border-border bg-card">
         <div className="flex items-center gap-4">
           <Link href="/reports">
             <Button variant="ghost" size="sm">
@@ -32,8 +63,8 @@ export default function PreviewReportPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-xl font-semibold">{report?.title}</h1>
-            <p className="text-sm text-gray-600">Preview Mode</p>
+            <h1 className="text-xl font-semibold text-foreground">{report?.title}</h1>
+            <p className="text-sm text-muted-foreground">Preview Mode</p>
           </div>
         </div>
         
@@ -45,7 +76,7 @@ export default function PreviewReportPage() {
             </Button>
           </Link>
           
-          <Button size="sm">
+          <Button size="sm" onClick={handleDownloadPDF}>
             <Download className="w-4 h-4 mr-1" />
             Download PDF
           </Button>
@@ -53,7 +84,7 @@ export default function PreviewReportPage() {
       </div>
 
       {/* PDF Preview */}
-      <div className="flex-1 bg-gray-100">
+      <div className="flex-1 bg-muted">
         <PDFPreview reportId={reportId} />
       </div>
     </div>
