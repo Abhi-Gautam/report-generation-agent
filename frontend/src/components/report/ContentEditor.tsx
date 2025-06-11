@@ -6,6 +6,8 @@ import { loader } from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import { Save, Eye, Code, Type, Table, BarChart3 } from 'lucide-react';
 import { SimilarContentSuggestions } from './SimilarContentSuggestions';
+import { useTheme } from 'next-themes';
+import { setupMonacoLanguages } from '@/lib/monaco-languages';
 
 interface Section {
   id: string;
@@ -25,6 +27,7 @@ export function ContentEditor({ section, onContentChange, isUpdating }: ContentE
   const [editorContent, setEditorContent] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const editorRef = useRef<any>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (section) {
@@ -92,10 +95,11 @@ E = mc^2
     );
   }
 
+
   return (
-    <div className="flex-1 flex">
+    <div className="h-full flex min-w-0">
       {/* Main Editor */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 min-w-[300px]">
         {/* Editor Header */}
         <div className="flex items-center justify-between p-4 border-b bg-background border-border">
           <div>
@@ -134,8 +138,9 @@ E = mc^2
             
             <Button
               size="sm"
-              variant="outline"
+              variant={showSuggestions ? "default" : "outline"}
               onClick={() => setShowSuggestions(!showSuggestions)}
+              className={showSuggestions ? "bg-primary text-primary-foreground" : ""}
             >
               <Eye className="w-4 h-4 mr-1" />
               Suggestions
@@ -144,7 +149,7 @@ E = mc^2
         </div>
 
         {/* Monaco Editor */}
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
           <Editor
             height="100%"
             language="latex"
@@ -152,6 +157,26 @@ E = mc^2
             onChange={handleEditorChange}
             onMount={(editor, monaco) => {
               editorRef.current = editor;
+              
+              // Setup Monaco language support for LaTeX and BibTeX
+              setupMonacoLanguages(monaco);
+              
+              // Add keyboard shortcuts for common LaTeX commands
+              editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
+                const selection = editor.getSelection();
+                if (selection) {
+                  const selectedText = editor.getModel()?.getValueInRange(selection) || 'text';
+                  editor.executeEdits('', [{ range: selection, text: `\\\\textbf{${selectedText}}` }]);
+                }
+              });
+              
+              editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI, () => {
+                const selection = editor.getSelection();
+                if (selection) {
+                  const selectedText = editor.getModel()?.getValueInRange(selection) || 'text';
+                  editor.executeEdits('', [{ range: selection, text: `\\\\textit{${selectedText}}` }]);
+                }
+              });
             }}
             options={{
               minimap: { enabled: false },
@@ -162,16 +187,43 @@ E = mc^2
               scrollBeyondLastLine: false,
               padding: { top: 16, bottom: 16 },
               suggestOnTriggerCharacters: true,
-              quickSuggestions: true
+              quickSuggestions: true,
+              // Enhanced LaTeX editing features
+              tabSize: 2,
+              insertSpaces: true,
+              detectIndentation: false,
+              trimAutoWhitespace: true,
+              formatOnPaste: true,
+              formatOnType: true,
+              autoIndent: 'full',
+              bracketPairColorization: { enabled: true },
+              guides: {
+                bracketPairs: true,
+                indentation: true
+              },
+              // Better LaTeX-specific settings
+              acceptSuggestionOnCommitCharacter: true,
+              acceptSuggestionOnEnter: 'on',
+              snippetSuggestions: 'top',
+              suggest: {
+                showKeywords: true,
+                showSnippets: true,
+                showFunctions: true
+              },
+              // Find and replace
+              find: {
+                addExtraSpaceOnTop: false,
+                autoFindInSelection: 'multiline'
+              }
             }}
-            theme="vs-light"
+            theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
           />
         </div>
       </div>
 
       {/* Suggestions Sidebar */}
       {showSuggestions && (
-        <div className="w-80 border-l bg-muted/50 border-border">
+        <div className="w-80 border-l bg-muted/50 border-border flex-shrink-0">
           <SimilarContentSuggestions
             reportId={section.id.split('_')[0]} // Extract reportId
             sectionId={section.id}

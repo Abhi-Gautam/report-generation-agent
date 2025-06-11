@@ -69,14 +69,14 @@ export function SectionNavigator({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Sections</h2>
+          <h2 className="font-semibold text-foreground">Sections</h2>
           <Button size="sm" onClick={addNewSection}>
             <Plus className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           {sections.length} section{sections.length !== 1 ? 's' : ''}
         </p>
       </div>
@@ -94,22 +94,22 @@ export function SectionNavigator({
                   id={section.id}
                   className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors border ${
                     selectedSectionId === section.id
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-white border-gray-200 hover:bg-gray-50'
+                      ? 'bg-primary/10 border-primary/20 text-primary'
+                      : 'bg-background border-border hover:bg-muted/50'
                   }`}
                   onClick={() => onSectionSelect(section.id)}
                 >
                   <div className="flex items-start gap-3">
                     <IconComponent className={`w-4 h-4 mt-0.5 ${
-                      selectedSectionId === section.id ? 'text-blue-600' : 'text-gray-500'
+                      selectedSectionId === section.id ? 'text-primary' : 'text-muted-foreground'
                     }`} />
                     <div className="flex-1 min-w-0">
                       <h3 className={`font-medium text-sm line-clamp-2 ${
-                        selectedSectionId === section.id ? 'text-blue-900' : 'text-gray-900'
+                        selectedSectionId === section.id ? 'text-primary' : 'text-foreground'
                       }`}>
                         {section.title}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {section.type.toLowerCase()} • {section.content.length} chars
                       </p>
                     </div>

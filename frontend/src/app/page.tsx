@@ -19,10 +19,10 @@ export default function HomePage() {
   const { isAuthenticated } = useAuth()
   const router = useRouter()
 
-  // Redirect logged-in users to dashboard
+  // Redirect logged-in users to reports
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/dashboard')
+      router.replace('/reports')
     }
   }, [isAuthenticated, router])
 

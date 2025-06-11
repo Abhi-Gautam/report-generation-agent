@@ -32,10 +32,10 @@ const suggestionIcons = {
 };
 
 const suggestionColors = {
-  similar_section: 'text-blue-600',
-  relevant_table: 'text-green-600',
-  related_chart: 'text-purple-600',
-  citation_opportunity: 'text-orange-600'
+  similar_section: 'text-blue-600 dark:text-blue-400',
+  relevant_table: 'text-green-600 dark:text-green-400',
+  related_chart: 'text-purple-600 dark:text-purple-400',
+  citation_opportunity: 'text-orange-600 dark:text-orange-400'
 };
 
 export function SimilarContentSuggestions({
@@ -124,9 +124,9 @@ export function SimilarContentSuggestions({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-gray-900">Content Suggestions</h3>
+          <h3 className="font-semibold text-foreground">Content Suggestions</h3>
           <Button
             size="sm"
             variant="ghost"
@@ -136,7 +136,7 @@ export function SimilarContentSuggestions({
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           AI-powered suggestions based on your content
         </p>
       </div>
@@ -146,20 +146,20 @@ export function SimilarContentSuggestions({
         {isLoading ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <p className="text-sm text-gray-600">Finding suggestions...</p>
+            <p className="text-sm text-muted-foreground">Finding suggestions...</p>
           </div>
         ) : error ? (
           <div className="text-center py-8">
-            <p className="text-sm text-red-600 mb-2">Error: {error}</p>
+            <p className="text-sm text-destructive mb-2">Error: {error}</p>
             <Button size="sm" variant="outline" onClick={fetchSuggestions}>
               Try Again
             </Button>
           </div>
         ) : suggestions.length === 0 ? (
           <div className="text-center py-8">
-            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-600 mb-2">No suggestions yet</p>
-            <p className="text-xs text-gray-500">
+            <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground mb-2">No suggestions yet</p>
+            <p className="text-xs text-muted-foreground/70">
               Keep writing to get AI-powered suggestions
             </p>
           </div>
@@ -170,24 +170,24 @@ export function SimilarContentSuggestions({
               const iconColor = suggestionColors[suggestion.type];
               
               return (
-                <Card key={index} className="p-3 hover:shadow-md transition-shadow">
+                <Card key={index} className="p-3 hover:shadow-md transition-shadow border-border">
                   <div className="flex items-start gap-3">
                     <IconComponent className={`w-4 h-4 mt-0.5 ${iconColor}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-700 capitalize">
+                        <span className="text-xs font-medium text-foreground capitalize">
                           {suggestion.type.replace('_', ' ')}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted-foreground">
                           {Math.round(suggestion.relevance * 100)}% match
                         </span>
                       </div>
                       
-                      <p className="text-sm text-gray-900 mb-2">
+                      <p className="text-sm text-foreground mb-2">
                         {suggestion.reason}
                       </p>
                       
-                      <div className="bg-gray-50 p-2 rounded text-xs text-gray-700 mb-2 max-h-20 overflow-y-auto">
+                      <div className="bg-muted p-2 rounded text-xs text-muted-foreground mb-2 max-h-20 overflow-y-auto">
                         {formatSuggestionContent(suggestion)}
                       </div>
                       

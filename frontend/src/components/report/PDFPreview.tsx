@@ -2,36 +2,44 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, RefreshCw, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { Download, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 
-// PDF.js setup with version 5.3.31
+// PDF.js setup - Use dynamic import only on client side
 const setupPDFJS = async () => {
   if (typeof window === 'undefined') return null;
   
-  // Import pdfjs-dist version 5.3.31
-  const pdfjs = await import('pdfjs-dist');
-  
-  // Use the exact worker version that matches
-  pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.3.31/build/pdf.worker.min.mjs';
-  
-  console.log(`PDF.js version: ${pdfjs.version}, Worker: 5.3.31`);
-  return pdfjs;
+  try {
+    // Import pdfjs-dist version 5.3.31
+    const pdfjs = await import('pdfjs-dist');
+    
+    // Use the exact worker version that matches
+    pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.3.31/build/pdf.worker.min.mjs';
+    
+    console.log(`PDF.js version: ${pdfjs.version}, Worker: 5.3.31`);
+    return pdfjs;
+  } catch (error) {
+    console.error('Failed to load PDF.js:', error);
+    return null;
+  }
 };
 
 interface PDFPreviewProps {
   reportId: string;
+  selectedSectionId?: string | null;
+  sections?: Array<{ id: string; title: string; }>;
 }
 
-export function PDFPreview({ reportId }: PDFPreviewProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderTaskRef = useRef<any>(null);
+export function PDFPreview({ reportId, selectedSectionId, sections }: PDFPreviewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const renderTasksRef = useRef<any[]>([]);
   const [pdf, setPdf] = useState<any>(null);
   const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.2);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [sectionPages, setSectionPages] = useState<Record<string, number>>({});
+  const [renderedPages, setRenderedPages] = useState<HTMLCanvasElement[]>([]);
 
   const loadPDF = async () => {
     setIsLoading(true);
@@ -65,14 +73,13 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
         const pdfDoc = await pdfjs.getDocument({ data: pdfArrayBuffer }).promise;
         setPdf(pdfDoc);
         setNumPages(pdfDoc.numPages);
-        setPageNumber(1);
         
         console.log(`PDF loaded successfully with ${pdfDoc.numPages} pages`);
         
-        // Force initial render of first page to avoid upside down issue
+        // Render all pages for vertical scrolling
         setTimeout(() => {
-          if (canvasRef.current && pdfDoc) {
-            renderPageDirect(pdfDoc, 1);
+          if (pdfDoc) {
+            renderAllPages(pdfDoc);
           }
         }, 100);
       } else if (pdfResponse.status === 404) {
@@ -96,65 +103,117 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
   }, [reportId]);
 
   useEffect(() => {
-    if (pdf && pageNumber) {
-      renderPage(pageNumber);
+    if (pdf && numPages > 0) {
+      renderAllPages(pdf);
     }
-  }, [pdf, pageNumber, scale]);
+  }, [pdf, numPages, scale]);
 
-  const renderPageDirect = async (pdfDoc: any, pageNum: number) => {
-    if (!canvasRef.current) return;
+  // Navigate to section when selectedSectionId changes
+  useEffect(() => {
+    if (selectedSectionId && pdf && containerRef.current) {
+      findAndNavigateToSection(selectedSectionId);
+    }
+  }, [selectedSectionId, pdf]);
 
+  const findAndNavigateToSection = async (sectionId: string) => {
+    if (!pdf || !containerRef.current) return;
+    
     try {
-      // Cancel previous render task
-      if (renderTaskRef.current) {
-        renderTaskRef.current.cancel();
+      // Get section title from the sections data (need to pass this as prop)
+      // For now, extract from sectionId or use a mapping
+      const sectionTitle = getSectionTitleFromId(sectionId);
+      if (!sectionTitle) return;
+
+      console.log('Searching for section:', sectionTitle);
+
+      // Search through all pages for the section title
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const textItems = textContent.items.map((item: any) => item.str).join(' ');
+        
+        // Check if this page contains the section title
+        if (textItems.toLowerCase().includes(sectionTitle.toLowerCase())) {
+          console.log(`Found section "${sectionTitle}" on page ${pageNum}`);
+          
+          // Scroll to this page
+          const pageElement = containerRef.current.querySelector(`[data-page="${pageNum}"]`);
+          if (pageElement) {
+            pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          break;
+        }
       }
-
-      const page = await pdfDoc.getPage(pageNum);
-      const viewport = page.getViewport({ 
-        scale,
-        rotation: 0 // Ensure no rotation on first render
-      });
-      
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      
-      // Clear canvas completely
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Set canvas dimensions
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport
-      };
-
-      // Store render task for cancellation
-      renderTaskRef.current = page.render(renderContext);
-      await renderTaskRef.current.promise;
-      renderTaskRef.current = null;
-      
     } catch (error) {
-      if (error.name === 'RenderingCancelledException') {
-        console.log('Direct rendering was cancelled');
-      } else {
-        console.error('Error in direct rendering:', error);
-      }
+      console.error('Error searching for section:', error);
     }
   };
 
-  const renderPage = async (pageNum: number) => {
-    if (!pdf || !canvasRef.current) return;
-    await renderPageDirect(pdf, pageNum);
+  const getSectionTitleFromId = (sectionId: string): string | null => {
+    if (!sections) return null;
+    const section = sections.find(s => s.id === sectionId);
+    return section ? section.title : null;
+  };
+
+  const renderAllPages = async (pdfDoc: any) => {
+    if (!containerRef.current) return;
+
+    try {
+      // Cancel previous render tasks
+      renderTasksRef.current.forEach(task => {
+        if (task) task.cancel();
+      });
+      renderTasksRef.current = [];
+
+      // Clear container
+      containerRef.current.innerHTML = '';
+      
+      const pages: HTMLCanvasElement[] = [];
+
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ 
+          scale,
+          rotation: 0
+        });
+        
+        // Create canvas for this page
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        canvas.dataset.page = pageNum.toString();
+        canvas.className = 'block mx-auto mb-4 shadow-lg bg-white';
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+
+        // Store render task for cancellation
+        const renderTask = page.render(renderContext);
+        renderTasksRef.current.push(renderTask);
+        
+        await renderTask.promise;
+        
+        containerRef.current?.appendChild(canvas);
+        pages.push(canvas);
+      }
+      
+      setRenderedPages(pages);
+      
+    } catch (error) {
+      if (error.name !== 'RenderingCancelledException') {
+        console.error('Error rendering pages:', error);
+      }
+    }
   };
 
   const handleRecompile = async () => {
     setIsCompiling(true);
     setPdf(null);
     setNumPages(0);
-    setPageNumber(1);
     
     try {
       const token = localStorage.getItem('auth_token');
@@ -237,14 +296,6 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
     );
   }
 
-  const handlePrevPage = () => {
-    setPageNumber(prev => Math.max(prev - 1, 1));
-  };
-
-  const handleNextPage = () => {
-    setPageNumber(prev => Math.min(prev + 1, numPages));
-  };
-
   const handleZoomIn = () => {
     setScale(prev => Math.min(prev + 0.3, 3.0));
   };
@@ -254,9 +305,9 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-w-0">
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-4 border-b bg-white">
+      <div className="flex items-center justify-between p-4 border-b bg-white border-border min-w-[200px] overflow-x-auto">
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleZoomOut} disabled={!pdf}>
             <ZoomOut className="w-4 h-4" />
@@ -271,27 +322,9 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
 
         <div className="flex items-center gap-2">
           {numPages > 0 && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handlePrevPage}
-                disabled={pageNumber <= 1}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm text-gray-600 px-2">
-                Page {pageNumber} of {numPages}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleNextPage}
-                disabled={pageNumber >= numPages}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </>
+            <span className="text-sm text-gray-600 px-2">
+              {numPages} page{numPages !== 1 ? 's' : ''}
+            </span>
           )}
         </div>
 
@@ -312,18 +345,20 @@ export function PDFPreview({ reportId }: PDFPreviewProps) {
         </div>
       </div>
 
-      {/* PDF Viewer */}
-      <div className="flex-1 bg-gray-100 flex items-center justify-center overflow-auto p-4">
+      {/* PDF Viewer - Vertically Scrollable */}
+      <div className="flex-1 bg-gray-100 overflow-y-auto p-4" style={{ scrollbarWidth: 'thin' }}>
         {pdf ? (
-          <div className="bg-white shadow-lg">
-            <canvas
-              ref={canvasRef}
-              className="block max-w-full h-auto"
-            />
+          <div 
+            ref={containerRef}
+            className="max-w-full"
+          >
+            {/* Pages will be rendered here dynamically */}
           </div>
         ) : (
-          <div className="text-center">
-            <p className="text-gray-500">No PDF available</p>
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-gray-500">No PDF available</p>
+            </div>
           </div>
         )}
       </div>
